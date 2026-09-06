@@ -7,7 +7,7 @@ kind: Group
 metadata:
   name: team-ai-platform
   title: AI platform
-  description: Owns the agent asset estate: skills, agents, hooks and packs.
+  description: "Owns the agent asset estate: skills, agents, hooks and packs."
 spec:
   type: team
   children: []

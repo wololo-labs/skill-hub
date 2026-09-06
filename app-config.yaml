@@ -9,12 +9,18 @@ app:
     # The hub opens on the asset browser, not on the software catalogue. The
     # stock catalogue stays available at /catalog for anyone who wants the
     # raw entity view.
-    - page:skill-hub:
+    - page:skill-hub/browse:
         config:
           path: /
     - page:catalog:
         config:
           path: /catalog
+
+    # The hub ships its own light and dark themes, both verified for contrast.
+    # Backstage's stock pair is switched off so the theme picker offers two
+    # deliberate choices rather than four.
+    - theme:app/light: false
+    - theme:app/dark: false
 
 organization:
   name: wololo labs
