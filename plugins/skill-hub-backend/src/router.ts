@@ -13,7 +13,7 @@ import {
 } from '@internal/plugin-skill-hub-common';
 import express from 'express';
 import { Octokit } from '@octokit/rest';
-import { SkillHubStatusService } from './status';
+import { RepositoryStatus, SkillHubStatusService } from './status';
 import { ReceiptQueue } from './receipts/ReceiptQueue';
 
 const FRONTMATTER = /^---\r?\n[\s\S]*?\r?\n---\s*(?:\r?\n|$)/;
@@ -35,6 +35,52 @@ export function readableBody(content: string, path: string): string {
   }
   const language = path.split('.').pop()?.toLowerCase() ?? '';
   return ['```' + language, content.trimEnd(), '```'].join('\n');
+}
+
+export interface BodyRequest {
+  repo: string;
+  commit: string;
+  path: string;
+  assetPath?: string;
+}
+
+/**
+ * Decides what the body route is allowed to read, before it reads it.
+ *
+ * This route uses the server's GitHub token, so the decision cannot be left to
+ * whatever wrote the annotations. Anyone who can register a catalogue location
+ * can put any repository and any path on an entity, and without these checks
+ * that would turn the hub into a way to read a private repository through its
+ * own credential.
+ *
+ *   1. the repository must be one the provider actually published, which means
+ *      it opted in by committing .agent-assets.yaml
+ *   2. the commit must look like the full sha the provider pins to
+ *   3. the file must live under the asset's own path
+ *
+ * Returns the reason for a refusal, or undefined to allow the read.
+ */
+export function refuseUnlessPublished(
+  request: BodyRequest,
+  repositories: RepositoryStatus[],
+): string | undefined {
+  const published = repositories.some(
+    r => r.repository === request.repo && r.state === 'published',
+  );
+  if (!published) {
+    return 'the repository is not one the provider published';
+  }
+  if (!/^[0-9a-f]{40}$/.test(request.commit)) {
+    return 'the commit is not a full sha';
+  }
+  const { assetPath, path } = request;
+  if (
+    assetPath === undefined ||
+    !(path === assetPath || path.startsWith(`${assetPath}/`))
+  ) {
+    return 'the file is outside the asset it belongs to';
+  }
+  return undefined;
 }
 
 export interface RouterOptions {
@@ -85,30 +131,16 @@ export async function createRouter(
       return;
     }
 
-    // This route reads GitHub with the server's token, so what it will read
-    // has to be decided here rather than by whatever wrote the annotations.
-    // Anyone able to register a catalogue location can put any repository and
-    // any path into an entity; without these three checks that would turn the
-    // hub into a way to read private repositories through its own credential.
-    //
-    //   1. the repository must be one the provider actually published, which
-    //      means it opted in by committing .agent-assets.yaml
-    //   2. the commit must be the one the entity is pinned to, which the
-    //      provider took from that repository's head
-    //   3. the file must live under the asset itself
-    const published = status
-      .get()
-      .repositories.some(r => r.repository === repo && r.state === 'published');
-    const withinAsset =
-      assetPath !== undefined &&
-      (path === assetPath || path.startsWith(`${assetPath}/`));
-    if (!published || !withinAsset || !/^[0-9a-f]{40}$/.test(commit)) {
-      logger.warn(
-        `refusing to read ${path} from ${repo}: the entity does not name a published asset`,
-      );
+    const refusal = refuseUnlessPublished(
+      { repo, commit, path, assetPath },
+      status.get().repositories,
+    );
+    if (refusal) {
+      logger.warn(`refusing to read ${path} from ${repo}: ${refusal}`);
       res.json({
         content: null,
-        reason: 'this asset is not one the hub discovered, so its body is not served',
+        reason:
+          'this asset is not one the hub discovered, so its body is not served',
       });
       return;
     }
