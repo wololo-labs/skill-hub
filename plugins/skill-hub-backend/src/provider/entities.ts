@@ -70,6 +70,27 @@ function sourceUrl(
 }
 
 /**
+ * A path, owner or repository name safe to put inside a command a person is
+ * about to paste into a shell.
+ *
+ * GitHub already constrains owner and repository names, but a path comes from
+ * a repository's own tree and may contain quotes, semicolons or backticks. An
+ * install command is copied and run by hand, so a path that could break out of
+ * its quoting is not escaped and offered anyway: the asset simply publishes no
+ * command, and stays browsable and readable.
+ */
+const SHELL_SAFE = /^[A-Za-z0-9._][A-Za-z0-9._\-\/]*$/;
+
+function shellSafe(...parts: string[]): boolean {
+  return parts.every(
+    part =>
+      SHELL_SAFE.test(part) &&
+      !part.split('/').includes('..') &&
+      part.length <= 512,
+  );
+}
+
+/**
  * The install gesture, as a copyable command per harness.
  *
  * An asset that lives inside an APM package installs as that package, because
@@ -83,6 +104,11 @@ function installCommands(
   harnesses: string[],
   target: { kind: 'package'; dir: string } | { kind: 'unit'; path: string },
 ): InstallCommands {
+  const subject = target.kind === 'package' ? target.dir : target.path;
+  if (!shellSafe(repo.owner, repo.repo, subject) || !/^[0-9a-f]{40}$/.test(commitSha)) {
+    return {};
+  }
+
   const commands: Record<string, string> = {};
   for (const harness of harnesses) {
     commands[harness] =
