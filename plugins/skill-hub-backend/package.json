@@ -1,0 +1,47 @@
+{
+  "name": "@internal/plugin-skill-hub-backend",
+  "version": "0.1.0",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "license": "UNLICENSED",
+  "private": true,
+  "publishConfig": {
+    "access": "public",
+    "main": "dist/index.cjs.js",
+    "types": "dist/index.d.ts"
+  },
+  "backstage": {
+    "role": "backend-plugin",
+    "pluginId": "skill-hub",
+    "pluginPackage": "@internal/plugin-skill-hub-backend"
+  },
+  "scripts": {
+    "start": "backstage-cli package start",
+    "build": "backstage-cli package build",
+    "lint": "backstage-cli package lint",
+    "test": "backstage-cli package test",
+    "clean": "backstage-cli package clean"
+  },
+  "dependencies": {
+    "@backstage/backend-plugin-api": "^1.10.0",
+    "@backstage/catalog-model": "^1.10.0",
+    "@backstage/config": "^1.3.8",
+    "@backstage/errors": "^1.2.7",
+    "@backstage/integration": "^1.19.0",
+    "@backstage/plugin-catalog-node": "^2.2.4",
+    "@octokit/rest": "^22.0.1",
+    "express": "^4.21.2",
+    "minimatch": "^10.2.6",
+    "yaml": "^2.9.0"
+  },
+  "devDependencies": {
+    "@backstage/backend-test-utils": "^1.9.0",
+    "@backstage/cli": "^0.36.5",
+    "@types/express": "^4.17.21"
+  },
+  "files": [
+    "dist",
+    "config.d.ts"
+  ],
+  "configSchema": "config.d.ts"
+}
