@@ -29,6 +29,7 @@
     "@backstage/errors": "^1.2.7",
     "@backstage/integration": "^1.19.0",
     "@backstage/plugin-catalog-node": "^2.2.4",
+    "@internal/plugin-skill-hub-common": "workspace:^",
     "@octokit/rest": "^22.0.1",
     "express": "^4.21.2",
     "minimatch": "^10.2.6",

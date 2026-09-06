@@ -4485,6 +4485,7 @@ __metadata:
     "@backstage/errors": "npm:^1.2.7"
     "@backstage/integration": "npm:^1.19.0"
     "@backstage/plugin-catalog-node": "npm:^2.2.4"
+    "@internal/plugin-skill-hub-common": "workspace:^"
     "@octokit/rest": "npm:^22.0.1"
     "@types/express": "npm:^4.17.21"
     express: "npm:^4.21.2"
