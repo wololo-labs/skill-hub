@@ -1,0 +1,13 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: skill-hub
+  description: >-
+    Backstage as the first-party catalogue and hub for agent assets: skills,
+    agents, hooks, prompts, eval suites and MCP servers.
+  annotations:
+    github.com/project-slug: wololo-labs/skill-hub
+spec:
+  type: website
+  owner: group:default/team-ai-platform
+  lifecycle: experimental

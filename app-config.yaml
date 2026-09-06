@@ -1,0 +1,97 @@
+app:
+  title: skill hub
+  baseUrl: http://localhost:3000
+
+  # Extensions are discovered from packages/app/package.json dependencies.
+  packages: all
+
+  extensions:
+    # The hub opens on the asset browser, not on the software catalogue. The
+    # stock catalogue stays available at /catalog for anyone who wants the
+    # raw entity view.
+    - page:skill-hub:
+        config:
+          path: /
+    - page:catalog:
+        config:
+          path: /catalog
+
+organization:
+  name: wololo labs
+
+backend:
+  baseUrl: http://localhost:7007
+  listen:
+    port: 7007
+  csp:
+    connect-src: ["'self'", 'http:', 'https:']
+  cors:
+    origin: http://localhost:3000
+    methods: [GET, HEAD, PATCH, POST, PUT, DELETE]
+    credentials: true
+  # Local development only. The Compose deployment uses Postgres, configured
+  # in app-config.production.yaml.
+  database:
+    client: better-sqlite3
+    connection: ':memory:'
+
+integrations:
+  github:
+    - host: github.com
+      # Read-only token, scoped to public repos and the owners listed under
+      # skillHub.owners. Supplied through the environment, never committed.
+      token: ${GITHUB_TOKEN}
+
+# The agent asset hub. Discovery is manifest-only: a repository joins the
+# catalogue by adding .agent-assets.yaml to its root, and leaves by removing
+# it. No topic, no code search, no per-repo Backstage configuration.
+skillHub:
+  owners:
+    - stevengonsalvez
+    - wololo-labs
+  schedule:
+    frequency:
+      minutes: 10
+    timeout:
+      minutes: 9
+    initialDelay:
+      seconds: 15
+  missionControl:
+    baseUrl: ${MISSION_CONTROL_BASE_URL}
+    token: ${MISSION_CONTROL_TOKEN}
+
+auth:
+  providers:
+    guest: {}
+    github:
+      development:
+        clientId: ${AUTH_GITHUB_CLIENT_ID}
+        clientSecret: ${AUTH_GITHUB_CLIENT_SECRET}
+        signIn:
+          resolvers:
+            - resolver: usernameMatchingUserEntityName
+              # Sign in works before anyone has modelled the org in the
+              # catalogue: an unknown GitHub login still gets an identity.
+              dangerouslyAllowSignInWithoutUserInCatalog: true
+  clientIdMetadataDocuments:
+    enabled: false
+
+catalog:
+  import:
+    entityFilename: catalog-info.yaml
+    pullRequestBranchName: backstage-integration
+  rules:
+    - allow: [Component, System, API, Resource, Location, AiResource, User, Group]
+  locations:
+    # A hand-written entity, kept so the pipeline is provable without the
+    # provider or GitHub: it is the one asset in here nobody discovered.
+    - type: file
+      target: ../../examples/entities.yaml
+
+    - type: file
+      target: ../../examples/org.yaml
+      rules:
+        - allow: [User, Group]
+
+permission:
+  enabled: true
