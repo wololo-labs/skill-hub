@@ -1,24 +1,52 @@
-import { Chip, Tooltip, makeStyles } from '@material-ui/core';
+import { Tooltip, makeStyles } from '@material-ui/core';
 import { EvalScore } from '@internal/plugin-skill-hub-common';
 
 const useStyles = makeStyles(theme => ({
-  chip: {
-    margin: 0,
-    fontWeight: 600,
-    letterSpacing: 0.2,
+  badge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    height: 22,
+    padding: '0 8px',
+    borderRadius: 4,
+    fontSize: 11,
+    fontWeight: 700,
+    letterSpacing: '0.04em',
+    textTransform: 'uppercase',
+    whiteSpace: 'nowrap',
+    border: '1px solid transparent',
   },
+  medium: {
+    height: 26,
+    fontSize: 12,
+    padding: '0 10px',
+  },
+  // The verdict is the only place on this surface that earns a filled colour.
   pass: {
-    backgroundColor: theme.palette.status.ok,
-    color: theme.palette.getContrastText(theme.palette.status.ok),
+    backgroundColor: theme.palette.highlight,
+    color: theme.palette.status.ok,
+    borderColor: theme.palette.status.ok,
   },
   fail: {
-    backgroundColor: theme.palette.status.error,
-    color: theme.palette.getContrastText(theme.palette.status.error),
+    backgroundColor: 'transparent',
+    color: theme.palette.status.error,
+    borderColor: theme.palette.status.error,
   },
+  // Unscored is deliberately achromatic and dashed. State is never carried by
+  // colour alone here: the shape of the border differs too, and the word says
+  // it outright.
   unscored: {
     backgroundColor: 'transparent',
-    border: `1px dashed ${theme.palette.textSubtle}`,
     color: theme.palette.textSubtle,
+    borderColor: theme.palette.textSubtle,
+    borderStyle: 'dashed',
+    fontWeight: 600,
+  },
+  metric: {
+    fontVariantNumeric: 'tabular-nums',
+    letterSpacing: 0,
+    fontWeight: 600,
+    opacity: 0.9,
   },
 }));
 
@@ -28,21 +56,20 @@ export interface ScoreBadgeProps {
 }
 
 /**
- * The score, or the absence of one, stated the same way everywhere. An
- * unscored asset is not a failure and does not read as one, but it is
- * visibly different from a gate that passed.
+ * The score, or the absence of one, stated the same way everywhere.
+ *
+ * An unscored asset is not a failure and must not read as one, but it has to
+ * be unmistakably different from a gate that passed, because that difference
+ * is what decides whether the install button works.
  */
 export const ScoreBadge = ({ score, size = 'small' }: ScoreBadgeProps) => {
   const classes = useStyles();
+  const sized = `${classes.badge} ${size === 'medium' ? classes.medium : ''}`;
 
   if (!score) {
     return (
       <Tooltip title="No eval gate report is attached to this asset, so it cannot be installed from here">
-        <Chip
-          size={size}
-          label="unscored"
-          className={`${classes.chip} ${classes.unscored}`}
-        />
+        <span className={`${sized} ${classes.unscored}`}>unscored</span>
       </Tooltip>
     );
   }
@@ -50,19 +77,21 @@ export const ScoreBadge = ({ score, size = 'small' }: ScoreBadgeProps) => {
   const verdict = (score.verdict ?? 'scored').toUpperCase();
   const passed = verdict === 'PASS';
   const headline = topMetric(score);
+
   return (
     <Tooltip
       title={
         headline
-          ? `${headline.name} ${headline.candidate} against a ${headline.baseline} baseline, recorded ${score.recorded ?? 'at an unknown date'}`
+          ? `${headline.name} ${headline.candidate} against a ${headline.baseline} baseline, recorded ${score.recorded ?? 'on an unknown date'}`
           : `Eval gate ${verdict}`
       }
     >
-      <Chip
-        size={size}
-        label={headline ? `${verdict} · ${headline.candidate}` : verdict}
-        className={`${classes.chip} ${passed ? classes.pass : classes.fail}`}
-      />
+      <span className={`${sized} ${passed ? classes.pass : classes.fail}`}>
+        {verdict}
+        {headline && (
+          <span className={classes.metric}>{headline.candidate}</span>
+        )}
+      </span>
     </Tooltip>
   );
 };
