@@ -16,6 +16,22 @@ const useStyles = makeStyles(theme => ({
     whiteSpace: 'nowrap',
     border: '1px solid transparent',
   },
+  visible: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+  },
+  srOnly: {
+    position: 'absolute',
+    width: 1,
+    height: 1,
+    padding: 0,
+    margin: -1,
+    overflow: 'hidden',
+    clip: 'rect(0 0 0 0)',
+    whiteSpace: 'nowrap',
+    border: 0,
+  },
   medium: {
     height: 26,
     fontSize: 12,
@@ -69,9 +85,14 @@ export const ScoreBadge = ({ score, size = 'small' }: ScoreBadgeProps) => {
   const sized = `${classes.badge} ${size === 'medium' ? classes.medium : ''}`;
 
   if (!score) {
+    const why =
+      'Unscored: no eval gate report is attached to this asset, so it cannot be installed from here';
     return (
-      <Tooltip title="No eval gate report is attached to this asset, so it cannot be installed from here">
-        <span className={`${sized} ${classes.unscored}`}>unscored</span>
+      <Tooltip title={why}>
+        <span className={`${sized} ${classes.unscored}`}>
+          <span aria-hidden="true">unscored</span>
+          <span className={classes.srOnly}>{why}</span>
+        </span>
       </Tooltip>
     );
   }
@@ -80,19 +101,28 @@ export const ScoreBadge = ({ score, size = 'small' }: ScoreBadgeProps) => {
   const passed = verdict === 'PASS';
   const headline = topMetric(score);
 
+  // The number on the badge means nothing on its own, so what it measures
+  // travels with it: in the tooltip for a pointer, and in the accessible name
+  // for everyone a tooltip never reaches.
+  const explanation = headline
+    ? `Eval gate ${verdict}: ${headline.name} ${headline.candidate} against a ${headline.baseline} baseline, recorded ${score.recorded ?? 'on an unknown date'}`
+    : `Eval gate ${verdict}`;
+
   return (
-    <Tooltip
-      title={
-        headline
-          ? `${headline.name} ${headline.candidate} against a ${headline.baseline} baseline, recorded ${score.recorded ?? 'on an unknown date'}`
-          : `Eval gate ${verdict}`
-      }
-    >
+    <Tooltip title={explanation}>
       <span className={`${sized} ${passed ? classes.pass : classes.fail}`}>
-        {verdict}
-        {headline && (
-          <span className={classes.metric}>{headline.candidate}</span>
-        )}
+        <span className={classes.visible} aria-hidden="true">
+          {verdict}
+          {headline && (
+            <span className={classes.metric}>{headline.candidate}</span>
+          )}
+        </span>
+        {/*
+          The number on the badge means nothing on its own, and a tooltip
+          reaches neither a screen reader nor a touch device. What it measures
+          travels in the accessible name instead of behind a hover.
+        */}
+        <span className={classes.srOnly}>{explanation}</span>
       </span>
     </Tooltip>
   );

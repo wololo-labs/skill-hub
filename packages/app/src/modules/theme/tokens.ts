@@ -28,7 +28,12 @@ export interface Tokens {
   okInk: string;
   okSurface: string;
   error: string;
+  errorSurface: string;
   warning: string;
+  warningSurface: string;
+  infoSurface: string;
+  /** The rule between rows in a long list, stronger than the card border. */
+  rowRule: string;
   codeSurface: string;
   codeInk: string;
   codeComment: string;
@@ -62,8 +67,19 @@ export const light: Tokens = {
   okSurface: '#DBF4E3',
   // oklch(0.520 0.180 27), 6.1:1 on paper
   error: '#BA2B28',
+  // oklch(0.945 0.030 27). Its own hue, not the success surface: an error
+  // banner painted green is the exact inversion of the rule that colour
+  // carries state. Ink on it clears 8.2:1.
+  errorSurface: '#FFE6E2',
   // oklch(0.560 0.130 70), 4.8:1 on paper
   warning: '#A46400',
+  // oklch(0.950 0.035 70), ink 7.5:1
+  warningSurface: '#FEEBD6',
+  // oklch(0.950 0.030 232), ink 7.6:1
+  infoSurface: '#DBF3FF',
+  // oklch(0.845 0 0). A hairline at the card border's 1.3:1 let 128 rows
+  // merge into one block, so the list rule is its own, stronger token.
+  rowRule: '#D1D1D1',
   // The markdown renderer ships a fixed dark code block whose comment colour
   // is 2.2:1. These replace it. oklch(0.965 0 0) surface, with ink at 12.2:1,
   // comments at 5.3:1 and literals at 6.6:1.
@@ -99,8 +115,16 @@ export const dark: Tokens = {
   okSurface: '#133621',
   // oklch(0.700 0.160 27), 6.1:1 on paper
   error: '#F27166',
+  // oklch(0.290 0.050 27), ink 8.2:1
+  errorSurface: '#41211E',
   // oklch(0.800 0.130 70), 9.2:1 on paper
   warning: '#F3AE58',
+  // oklch(0.300 0.055 70), ink 9.0:1
+  warningSurface: '#3F280A',
+  // oklch(0.300 0.050 232), ink 9.1:1
+  infoSurface: '#0E3243',
+  // oklch(0.395 0 0)
+  rowRule: '#3D3D3D',
   // oklch(0.235 0 0) surface, ink 12.4:1, comments 6.3:1, literals 7.4:1.
   codeSurface: '#1E1E1E',
   codeInk: '#DEDEDE',

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Box, Typography, makeStyles } from '@material-ui/core';
 import { InfoCard, Link } from '@backstage/core-components';
 import { useApi } from '@backstage/core-plugin-api';
@@ -15,9 +15,6 @@ const useStyles = makeStyles(theme => ({
     marginBottom: theme.spacing(2),
   },
   harness: {
-    // A wrapping row of toggles rather than tabs. Tabs in a 340px column
-    // silently clip the third harness instead of scrolling, and the install
-    // panel gaining a harness must never be able to hide one.
     minHeight: 30,
     padding: theme.spacing(0.5, 1.25),
     borderRadius: theme.shape.borderRadius,
@@ -40,24 +37,30 @@ const useStyles = makeStyles(theme => ({
     color: theme.palette.primary.main,
     background: theme.palette.action.selected,
   },
-  command: {
+  commandRow: {
     display: 'flex',
     alignItems: 'flex-start',
     gap: theme.spacing(1),
+  },
+  // The command scrolls rather than wraps. Breaking a 40 character sha across
+  // a line is what stops a developer verifying what they are about to paste
+  // into a shell, and this is the one line the product exists to hand over.
+  commandScroll: {
+    flex: 1,
+    minWidth: 0,
     padding: theme.spacing(1.5),
     borderRadius: theme.shape.borderRadius,
     backgroundColor: theme.palette.background.default,
     border: `1px solid ${theme.palette.divider}`,
+    overflowX: 'auto',
   },
   commandText: {
-    flex: 1,
-    minWidth: 0,
     margin: 0,
     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
     fontSize: 12.5,
     lineHeight: 1.7,
-    whiteSpace: 'pre-wrap',
-    overflowWrap: 'anywhere',
+    // Only newlines wrap. A token never breaks.
+    whiteSpace: 'pre',
     color: theme.palette.text.primary,
   },
   blocked: {
@@ -66,29 +69,70 @@ const useStyles = makeStyles(theme => ({
     border: `1px dashed ${theme.palette.divider}`,
     backgroundColor: theme.palette.background.default,
   },
-  scoreLink: {
-    // Standalone, so it is a target rather than a word in a sentence.
-    display: 'inline-flex',
-    alignItems: 'center',
-    minHeight: 28,
-    fontSize: 13.5,
-  },
   blockedTitle: {
     fontWeight: 600,
     fontSize: 14,
     marginBottom: theme.spacing(0.5),
+  },
+  staleText: {
+    margin: 0,
+  },
+  stale: {
+    padding: theme.spacing(1.25, 1.5),
+    marginBottom: theme.spacing(2),
+    borderRadius: theme.shape.borderRadius,
+    backgroundColor: theme.palette.warningBackground,
+    color: theme.palette.text.primary,
+    fontSize: 12.5,
+    lineHeight: 1.55,
+  },
+  acknowledge: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(1),
+    marginTop: theme.spacing(1.25),
+    // The whole label is the target, so the hit area is not the 13px the
+    // browser gives a bare checkbox.
+    minHeight: 32,
+    padding: theme.spacing(0.5, 0.75),
+    marginLeft: theme.spacing(-0.75),
+    borderRadius: theme.shape.borderRadius,
+    font: 'inherit',
+    fontSize: 12.5,
+    fontWeight: 600,
+    cursor: 'pointer',
+    '&:hover': { backgroundColor: theme.palette.action.hover },
+    '&:focus-within': {
+      outline: `2px solid ${theme.palette.primary.main}`,
+      outlineOffset: 1,
+    },
+  },
+  checkbox: {
+    // 24px, the WCAG 2.2 AA minimum, on the control itself rather than only
+    // on the label around it.
+    width: 24,
+    height: 24,
+    margin: 0,
+    accentColor: theme.palette.primary.main,
+    cursor: 'pointer',
   },
   body: {
     color: theme.palette.textSubtle,
     fontSize: 13,
     lineHeight: 1.6,
   },
+  scoreLink: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    minHeight: 28,
+    fontSize: 13.5,
+  },
   pin: {
     display: 'block',
     marginTop: theme.spacing(1.5),
     color: theme.palette.textSubtle,
     fontSize: 12,
-    fontVariantNumeric: 'tabular-nums',
+    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
     overflowWrap: 'anywhere',
   },
   receipt: {
@@ -97,23 +141,25 @@ const useStyles = makeStyles(theme => ({
     color: theme.palette.status.ok,
     fontSize: 12,
   },
-  '@media (prefers-reduced-motion: reduce)': {
-    harness: { transition: 'none' },
-  },
 }));
 
 export interface InstallPanelProps {
   asset: Asset;
+  /** True when the score was measured at a commit this asset is not pinned to. */
+  stale?: boolean;
 }
 
 /**
  * The install gesture: pick a harness, copy one line, run it locally.
  *
- * The button is disabled for an unscored asset on purpose, and the panel says
- * why and where to go next rather than hiding the control. The score is the
- * gate; a gate that is invisible teaches nothing.
+ * Two things are refused here rather than explained away. An asset with no
+ * eval gate report has no command at all, because the score is the gate. An
+ * asset whose score was measured against a different tree is not treated as
+ * scored either: it is closer to unmeasured than to measured, and the product
+ * already knows the difference, so it asks for that to be acknowledged before
+ * it hands anything over.
  */
-export const InstallPanel = ({ asset }: InstallPanelProps) => {
+export const InstallPanel = ({ asset, stale = false }: InstallPanelProps) => {
   const classes = useStyles();
   const api = useApi(skillHubApiRef);
   const offered = HARNESSES.filter(
@@ -121,6 +167,8 @@ export const InstallPanel = ({ asset }: InstallPanelProps) => {
   );
   const [selected, setSelected] = useState(0);
   const [copied, setCopied] = useState(false);
+  const [acknowledged, setAcknowledged] = useState(false);
+  const radios = useRef<Array<HTMLButtonElement | null>>([]);
 
   if (!offered.length) {
     return (
@@ -136,7 +184,26 @@ export const InstallPanel = ({ asset }: InstallPanelProps) => {
   const index = Math.min(selected, offered.length - 1);
   const harness = offered[index];
   const command = asset.install[harness.id]!;
-  const installable = Boolean(asset.score);
+  const scored = Boolean(asset.score);
+  const installable = scored && (!stale || acknowledged);
+
+  // A radiogroup promises one tab stop and arrow keys. Without this it
+  // delivers three tab stops and dead arrows, which is worse than no role.
+  const onKeyDown = (event: React.KeyboardEvent) => {
+    const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[
+      event.key
+    ];
+    const jump = { Home: 0, End: offered.length - 1 }[event.key];
+    const next =
+      step !== undefined
+        ? (index + step + offered.length) % offered.length
+        : jump;
+    if (next === undefined) return;
+    event.preventDefault();
+    setSelected(next);
+    setCopied(false);
+    radios.current[next]?.focus();
+  };
 
   return (
     <InfoCard
@@ -155,9 +222,15 @@ export const InstallPanel = ({ asset }: InstallPanelProps) => {
         {offered.map((h, i) => (
           <button
             key={h.id}
+            ref={el => {
+              radios.current[i] = el;
+            }}
             type="button"
             role="radio"
             aria-checked={i === index}
+            // Roving tabindex: the group is one stop, arrows move within it.
+            tabIndex={i === index ? 0 : -1}
+            onKeyDown={onKeyDown}
             onClick={() => {
               setSelected(i);
               setCopied(false);
@@ -171,11 +244,32 @@ export const InstallPanel = ({ asset }: InstallPanelProps) => {
         ))}
       </div>
 
+      {scored && stale && (
+        <div className={classes.stale}>
+          <p className={classes.staleText}>
+            This asset's score was measured against a different commit from the
+            one this command installs, so it does not describe what you would
+            be running.
+          </p>
+          <label className={classes.acknowledge}>
+            <input
+              type="checkbox"
+              className={classes.checkbox}
+              checked={acknowledged}
+              onChange={e => setAcknowledged(e.target.checked)}
+            />
+            Install anyway
+          </label>
+        </div>
+      )}
+
       <Box>
         {installable ? (
           <>
-            <div className={classes.command}>
-              <pre className={classes.commandText}>{command}</pre>
+            <div className={classes.commandRow}>
+              <div className={classes.commandScroll}>
+                <pre className={classes.commandText}>{command}</pre>
+              </div>
               <CopyCommand
                 text={command}
                 label={harness.label}
@@ -187,34 +281,42 @@ export const InstallPanel = ({ asset }: InstallPanelProps) => {
             </div>
             {copied && (
               <Typography className={classes.receipt} role="status">
-                Copy recorded against you, this asset and this commit.
+                Copy recorded: {asset.name} for {harness.label}.
               </Typography>
             )}
           </>
         ) : (
           <div className={classes.blocked}>
             <Typography className={classes.blockedTitle}>
-              Install is blocked until this asset has a score
+              {scored
+                ? 'Confirm you want a command the score does not cover'
+                : 'Install is blocked until this asset has a score'}
             </Typography>
             <Typography className={classes.body}>
-              Nobody has run an eval gate against this asset, so there is
-              nothing to say whether it works. Publish a gate report and it
-              becomes installable on the next sync.
+              {scored
+                ? 'The measurement above describes a different tree. Tick the box to take the command anyway.'
+                : 'Nobody has run an eval gate against this asset, so there is nothing to say whether it works. Publish a gate report and it becomes installable on the next sync.'}
             </Typography>
-            <Box mt={1.5}>
-              <Link
-                className={classes.scoreLink}
-                to="https://github.com/wololo-labs/skill-hub/blob/main/docs/SCORING.md"
-              >
-                How to score an asset
-              </Link>
-            </Box>
+            {!scored && (
+              <Box mt={1.5}>
+                <Link
+                  className={classes.scoreLink}
+                  to="https://github.com/wololo-labs/skill-hub/blob/main/docs/SCORING.md"
+                >
+                  How to score an asset
+                </Link>
+              </Box>
+            )}
           </div>
         )}
 
         {asset.commit && (
+          // The full sha, not a prefix: it is here to be compared against the
+          // one inside the command, which a 12 character stub cannot do.
           <Typography className={classes.pin}>
-            {asset.repo} at {asset.commit.slice(0, 12)}
+            {asset.repo}
+            <br />
+            {asset.commit}
           </Typography>
         )}
       </Box>

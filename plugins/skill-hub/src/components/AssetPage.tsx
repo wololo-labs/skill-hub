@@ -1,6 +1,7 @@
 import { useParams } from 'react-router-dom';
 import {
   Box,
+  Button,
   Table,
   TableBody,
   TableCell,
@@ -21,6 +22,7 @@ import {
 import { useApi } from '@backstage/core-plugin-api';
 import { useRouteRef } from '@backstage/frontend-plugin-api';
 import { catalogApiRef } from '@backstage/plugin-catalog-react';
+import useAsyncRetry from 'react-use/esm/useAsyncRetry';
 import useAsync from 'react-use/esm/useAsync';
 import { toAsset } from '../model';
 import { skillHubApiRef } from '../api';
@@ -82,7 +84,15 @@ const useStyles = makeStyles(theme => ({
   badges: {
     display: 'flex',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: theme.spacing(1),
+    // Backstage absolutely positions header children on narrow viewports,
+    // which put these on top of the repository name. Below md they go back
+    // into the flow.
+    [theme.breakpoints.down('sm')]: {
+      position: 'static',
+      marginTop: theme.spacing(1.5),
+    },
   },
   type: {
     fontWeight: 700,
@@ -155,7 +165,9 @@ export const AssetPage = () => {
     () => catalogApi.getEntityByRef(entityRef),
     [catalogApi, entityRef],
   );
-  const body = useAsync(
+  // Retryable: a body fetch that fails should offer the developer a way back
+  // rather than a dead end.
+  const body = useAsyncRetry(
     () => skillHubApi.getAssetBody(entityRef),
     [skillHubApi, entityRef],
   );
@@ -202,6 +214,12 @@ export const AssetPage = () => {
 
   const asset = toAsset(entity.value);
   const score = asset.score;
+  // Built from provenance rather than from the body response, so the escape
+  // hatch to GitHub survives the body failing to load.
+  const sourceUrl =
+    asset.repo && asset.commit && asset.path
+      ? `https://github.com/${asset.repo}/tree/${asset.commit}/${asset.path}`
+      : undefined;
   const stale =
     score?.measuredCommit &&
     asset.commit &&
@@ -233,31 +251,62 @@ export const AssetPage = () => {
 
         <div className={classes.columns}>
           <InfoCard
-            title={body.value?.path?.split('/').pop() ?? 'Asset'}
-            subheader={body.value?.path}
+            title={body.value?.path?.split('/').pop() ?? asset.title}
+            subheader={body.value?.path ?? asset.path}
             deepLink={
-              body.value?.url
-                ? { title: 'Read it on GitHub', link: body.value.url }
-                : undefined
+              sourceUrl ? { title: 'Read it on GitHub', link: sourceUrl } : undefined
             }
           >
             {body.loading && <Progress />}
-            {body.error && <ResponseErrorPanel error={body.error} />}
+
+            {/*
+              A failed fetch is a fact about this request, not about the asset.
+              Saying "this asset is not one the hub discovered" on the hub's
+              own page for that asset is the interface inventing a diagnosis
+              and stating it as evidence.
+            */}
+            {body.error && (
+              <>
+                <Typography className={classes.muted}>
+                  The asset body could not be loaded. That is a problem with
+                  this request, not with the asset itself.
+                </Typography>
+                <Box mt={1.5} display="flex" gridGap={16} alignItems="center">
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => body.retry()}
+                  >
+                    Try again
+                  </Button>
+                  {sourceUrl && <Link to={sourceUrl}>Read it on GitHub</Link>}
+                </Box>
+              </>
+            )}
+
             {!body.loading && !body.error && body.value?.content && (
               <div className={classes.body}>
                 <MarkdownContent content={body.value.content} dialect="gfm" />
               </div>
             )}
+
             {!body.loading && !body.error && !body.value?.content && (
-              <Typography className={classes.muted}>
-                {body.value?.reason ??
-                  'This asset has no rendered body. Follow the source link to read it in the repository.'}
-              </Typography>
+              <>
+                <Typography className={classes.muted}>
+                  {body.value?.reason ??
+                    'This asset has no rendered body.'}
+                </Typography>
+                {sourceUrl && (
+                  <Box mt={1.5}>
+                    <Link to={sourceUrl}>Read it on GitHub</Link>
+                  </Box>
+                )}
+              </>
             )}
           </InfoCard>
 
           <div className={classes.side}>
-            <InstallPanel asset={asset} />
+            <InstallPanel asset={asset} stale={Boolean(stale)} />
 
             <InfoCard title="Provenance">
               <Table size="small">
@@ -339,7 +388,7 @@ export const AssetPage = () => {
                         {score.measuredCommit!.slice(0, 12)}
                       </span>
                       , which is not the commit the asset is pinned to. The
-                      numbers below describe that earlier tree.
+                      numbers above describe that earlier tree.
                     </Typography>
                   )}
 

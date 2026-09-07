@@ -65,6 +65,32 @@ describe('visibleAssets', () => {
   });
 });
 
+describe('searchRank', () => {
+  it('puts an exact name above a description mention', () => {
+    // The hurried developer types the asset's name. Returning something that
+    // merely mentions it first is the failure this ordering exists to stop.
+    const exact = toAsset(entity({ name: 'commit' }));
+    const mentions = toAsset(
+      entity({ name: 'code-reviewer', description: 'reviews a commit' }),
+    );
+    const ranked = visibleAssets([mentions, exact], {
+      ...EMPTY_FACETS,
+      text: 'commit',
+    });
+    expect(ranked.map(a => a.name)).toEqual(['commit', 'code-reviewer']);
+  });
+
+  it('puts a prefix above a mid-string match', () => {
+    const prefix = toAsset(entity({ name: 'commit-helper' }));
+    const middle = toAsset(entity({ name: 'auto-commit-thing' }));
+    expect(
+      visibleAssets([middle, prefix], { ...EMPTY_FACETS, text: 'commit' }).map(
+        a => a.name,
+      ),
+    ).toEqual(['commit-helper', 'auto-commit-thing']);
+  });
+});
+
 describe('applyFacets', () => {
   it('narrows by type, owner, harness and score together', () => {
     expect(
@@ -97,11 +123,26 @@ describe('applyFacets', () => {
 
 describe('facetCounts', () => {
   it('counts against the other facets, so no offered count is a dead end', () => {
-    // With the hook type selected, the score facet must count only hooks:
-    // offering "scored 1" here would promise a result the filter cannot give.
+    // With the hook type selected the pool is one unscored hook, so "scored"
+    // must not be offered: it would promise a result the filter cannot give.
     const counts = facetCounts(assets, { ...EMPTY_FACETS, type: ['hook'] }, 'score');
-    expect(counts.get('unscored')).toBe(1);
     expect(counts.get('scored')).toBeUndefined();
+  });
+
+  it('drops a value every asset has, because it cannot narrow anything', () => {
+    // Every asset targets claude, so a claude filter would change nothing.
+    // A control that cannot change the result is not a control.
+    expect(facetCounts(assets, EMPTY_FACETS, 'harness').get('claude')).toBeUndefined();
+    expect(facetCounts(assets, EMPTY_FACETS, 'harness').get('codex')).toBe(4);
+  });
+
+  it('keeps a value that is already selected, so a filter never vanishes', () => {
+    const counts = facetCounts(
+      assets,
+      { ...EMPTY_FACETS, harness: ['claude'] },
+      'harness',
+    );
+    expect(counts.get('claude')).toBe(5);
   });
 
   it('counts its own dimension against everything else', () => {

@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { Typography, makeStyles } from '@material-ui/core';
 import { Asset } from '../model';
@@ -7,7 +8,7 @@ const useStyles = makeStyles(theme => ({
   row: {
     display: 'block',
     padding: theme.spacing(2, 2.5),
-    borderBottom: `1px solid ${theme.palette.divider}`,
+    borderBottom: `1px solid ${theme.palette.textVerySubtle}`,
     textDecoration: 'none',
     color: 'inherit',
     transition: 'background-color 140ms cubic-bezier(0.16, 1, 0.3, 1)',
@@ -17,13 +18,26 @@ const useStyles = makeStyles(theme => ({
       outlineOffset: -2,
       backgroundColor: theme.palette.action.hover,
     },
-    '&:first-child': { borderTop: `1px solid ${theme.palette.divider}` },
+    '&:first-child': {
+      borderTop: `1px solid ${theme.palette.textVerySubtle}`,
+    },
   },
   head: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: theme.spacing(2),
+    [theme.breakpoints.down('sm')]: {
+      // The badge drops to the meta row so the title gets the full width.
+      display: 'block',
+    },
+  },
+  badgeWide: {
+    [theme.breakpoints.down('sm')]: { display: 'none' },
+  },
+  badgeNarrow: {
+    display: 'none',
+    [theme.breakpoints.down('sm')]: { display: 'inline-flex' },
   },
   name: {
     fontWeight: 600,
@@ -32,6 +46,14 @@ const useStyles = makeStyles(theme => ({
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
+    // On a phone the name is the only field that answers "is this the thing",
+    // and it is the one that was being cut. Two lines there, one here.
+    [theme.breakpoints.down('sm')]: {
+      whiteSpace: 'normal',
+      display: '-webkit-box',
+      WebkitLineClamp: 2,
+      WebkitBoxOrient: 'vertical',
+    },
   },
   description: {
     marginTop: 2,
@@ -85,7 +107,7 @@ export interface AssetRowProps {
  * A row rather than a card: the list is long and homogeneous, and a grid of
  * identical cards would spend a lot of space saying nothing the rows do not.
  */
-export const AssetRow = ({ asset, to }: AssetRowProps) => {
+const Row = ({ asset, to }: AssetRowProps) => {
   const classes = useStyles();
 
   return (
@@ -94,7 +116,9 @@ export const AssetRow = ({ asset, to }: AssetRowProps) => {
         <Typography component="h2" className={classes.name}>
           {asset.title}
         </Typography>
-        <ScoreBadge score={asset.score} />
+        <span className={classes.badgeWide}>
+          <ScoreBadge score={asset.score} />
+        </span>
       </div>
 
       <Typography className={classes.description}>
@@ -102,6 +126,9 @@ export const AssetRow = ({ asset, to }: AssetRowProps) => {
       </Typography>
 
       <div className={classes.meta}>
+        <span className={classes.badgeNarrow}>
+          <ScoreBadge score={asset.score} />
+        </span>
         <span className={classes.type}>{asset.type}</span>
         <span>{asset.owner}</span>
         {asset.repo && (
@@ -124,3 +151,12 @@ export const AssetRow = ({ asset, to }: AssetRowProps) => {
     </RouterLink>
   );
 };
+
+/**
+ * Memoised because every keystroke in the search box re-renders the whole
+ * list, and a row only changes when its own asset or link does.
+ */
+export const AssetRow = memo(
+  Row,
+  (a, b) => a.to === b.to && a.asset.entityRef === b.asset.entityRef,
+);

@@ -131,9 +131,40 @@ export function applyFacets(assets: Asset[], facets: Facets): Asset[] {
   });
 }
 
-/** The list as the browse page shows it: filtered, then ordered. */
+/**
+ * How well an asset answers a search. Higher is better.
+ *
+ * Without this, typing an asset's exact name can put that asset second,
+ * behind something that merely mentions the word in its description, which is
+ * the single most natural gesture a hurried developer makes.
+ */
+export function searchRank(asset: Asset, query: string): number {
+  const q = query.trim().toLowerCase();
+  if (!q) return 0;
+  const name = asset.name.toLowerCase();
+  const title = asset.title.toLowerCase();
+  if (name === q || title === q) return 4;
+  if (name.startsWith(q) || title.startsWith(q)) return 3;
+  if (name.includes(q) || title.includes(q)) return 2;
+  if ((asset.description ?? '').toLowerCase().includes(q)) return 1;
+  return 0;
+}
+
+/**
+ * The list as the browse page shows it: filtered, then ordered.
+ *
+ * With a query, relevance leads and the score breaks ties. Without one, the
+ * score leads, because the catalogue's claim is that it decides whether an
+ * asset can be installed at all.
+ */
 export function visibleAssets(assets: Asset[], facets: Facets): Asset[] {
-  return applyFacets(assets, facets).sort(byScoreThenName);
+  const filtered = applyFacets(assets, facets);
+  const query = facets.text.trim();
+  if (!query) return filtered.sort(byScoreThenName);
+  return filtered.sort((a, b) => {
+    const rank = searchRank(b, query) - searchRank(a, query);
+    return rank !== 0 ? rank : byScoreThenName(a, b);
+  });
 }
 
 /**
@@ -153,10 +184,21 @@ export function facetCounts(
   };
 
   const others = { ...facets, [dimension]: [] } as Facets;
+  const pool = applyFacets(assets, others);
   const counts = new Map<string, number>();
-  for (const asset of applyFacets(assets, others)) {
+  for (const asset of pool) {
     for (const value of values[dimension](asset)) {
       counts.set(value, (counts.get(value) ?? 0) + 1);
+    }
+  }
+
+  // A value every asset carries cannot narrow anything, so offering it is a
+  // control that looks like one and is not. Selected values stay, so a filter
+  // already applied never vanishes from under the user.
+  const selected = facets[dimension] as string[];
+  for (const [value, count] of counts) {
+    if (count === pool.length && pool.length > 0 && !selected.includes(value)) {
+      counts.delete(value);
     }
   }
   return counts;

@@ -89,11 +89,6 @@ catalog:
   rules:
     - allow: [Component, System, API, Resource, Location, AiResource, User, Group]
   locations:
-    # A hand-written entity, kept so the pipeline is provable without the
-    # provider or GitHub: it is the one asset in here nobody discovered.
-    - type: file
-      target: ../../examples/entities.yaml
-
     - type: file
       target: ../../examples/org.yaml
       rules:

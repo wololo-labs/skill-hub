@@ -5,6 +5,11 @@ const useStyles = makeStyles(theme => ({
   root: {
     position: 'sticky',
     top: theme.spacing(2),
+    // A sticky panel with no bound cannot be scrolled past, so once it is
+    // taller than the viewport its lower groups become unreachable.
+    maxHeight: `calc(100vh - ${theme.spacing(6)}px)`,
+    overflowY: 'auto',
+    paddingRight: theme.spacing(0.5),
   },
   header: {
     display: 'flex',
@@ -172,7 +177,7 @@ export const FacetPanel = ({ assets, facets, onChange }: FacetPanelProps) => {
 
             {values.length === 0 ? (
               <Typography className={classes.empty}>
-                nothing left to filter by
+                Nothing left to filter by.
               </Typography>
             ) : (
               values.map(([value, count]) => {

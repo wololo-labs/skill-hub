@@ -33,8 +33,6 @@ catalog:
     # File locations are relative to the backend process, which is the image
     # root in a container.
     - type: file
-      target: ./examples/entities.yaml
-    - type: file
       target: ./examples/org.yaml
       rules:
         - allow: [User, Group]

@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useDeferredValue, useMemo, useState } from 'react';
 import {
   Box,
+  Button,
   Collapse,
   Grid,
   IconButton,
@@ -68,6 +69,13 @@ const useStyles = makeStyles(theme => ({
     fontFamily: 'monospace',
     fontSize: '0.95em',
   },
+  list: {
+    // A real list, so a screen reader announces how many assets there are and
+    // where the reader is in them.
+    listStyle: 'none',
+    margin: 0,
+    padding: 0,
+  },
   filterToggle: {
     display: 'flex',
     alignItems: 'center',
@@ -106,6 +114,16 @@ const useStyles = makeStyles(theme => ({
   },
 }));
 
+/** Names what actually produced an empty result, rather than guessing. */
+function emptyTitle(query: string, activeFacets: number): string {
+  if (query && activeFacets > 0) {
+    return `Nothing matches "${query}" with those filters`;
+  }
+  if (query) return `Nothing matches "${query}"`;
+  if (activeFacets > 0) return 'Nothing matches those filters';
+  return 'Nothing has been published yet';
+}
+
 /**
  * Everything the estate publishes, in one list.
  *
@@ -141,13 +159,24 @@ export const BrowsePage = () => {
   }, [catalogApi]);
 
   const assets = useMemo<Asset[]>(() => value ?? [], [value]);
-  const visible = useMemo(() => visibleAssets(assets, facets), [assets, facets]);
+  // Typing updates the field immediately and the list catches up, so a
+  // keystroke is never waiting on a re-sort of every asset in the estate.
+  const deferredText = useDeferredValue(facets.text);
+  const deferredFacets = useMemo(
+    () => ({ ...facets, text: deferredText }),
+    [facets, deferredText],
+  );
+  const visible = useMemo(
+    () => visibleAssets(assets, deferredFacets),
+    [assets, deferredFacets],
+  );
   const activeFacets =
     facets.type.length +
     facets.score.length +
     facets.harness.length +
     facets.owner.length;
-  const filtered = facets.text.trim() !== '' || activeFacets > 0;
+  const query = facets.text.trim();
+  const filtered = query !== '' || activeFacets > 0;
 
   return (
     <Page themeId="home">
@@ -217,7 +246,6 @@ export const BrowsePage = () => {
                 fullWidth
                 variant="outlined"
                 size="small"
-                type="search"
                 label="Search assets"
                 placeholder="Name, description, repository or tag"
                 value={facets.text}
@@ -254,13 +282,11 @@ export const BrowsePage = () => {
               {!loading && visible.length === 0 && (
                 <Box className={classes.empty}>
                   <Typography className={classes.emptyTitle}>
-                    {filtered
-                      ? 'Nothing matches those filters'
-                      : 'Nothing has been published yet'}
+                    {emptyTitle(query, activeFacets)}
                   </Typography>
                   <Typography className={classes.emptyBody}>
                     {filtered ? (
-                      'Clear a filter to widen the search. Every asset in the catalogue came from a repository that opted in, so a gap here usually means a repository has not published yet.'
+                      'Every asset here came from a repository that opted in, so a gap can also mean nobody has published one yet.'
                     ) : (
                       <>
                         A repository joins the catalogue by committing{' '}
@@ -270,26 +296,65 @@ export const BrowsePage = () => {
                       </>
                     )}
                   </Typography>
+                  {/*
+                    Offer only the recovery that exists. Telling someone to
+                    clear a filter when they set none is worse than silence.
+                  */}
+                  {filtered && (
+                    <Box mt={2} display="flex" gridGap={12} justifyContent="center">
+                      {query !== '' && (
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={() => setFacets({ ...facets, text: '' })}
+                        >
+                          Clear the search
+                        </Button>
+                      )}
+                      {activeFacets > 0 && (
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={() =>
+                            setFacets({
+                              ...facets,
+                              type: [],
+                              score: [],
+                              harness: [],
+                              owner: [],
+                            })
+                          }
+                        >
+                          Clear {activeFacets}{' '}
+                          {activeFacets === 1 ? 'filter' : 'filters'}
+                        </Button>
+                      )}
+                    </Box>
+                  )}
                 </Box>
               )}
 
-              {!loading &&
-                visible.map(asset => {
-                  const ref = parseEntityRef(asset.entityRef);
-                  return (
-                    <AssetRow
-                      key={asset.entityRef}
-                      asset={asset}
-                      to={
-                        assetRoute?.({
-                          kind: ref.kind.toLowerCase(),
-                          namespace: ref.namespace,
-                          name: ref.name,
-                        }) ?? ''
-                      }
-                    />
-                  );
-                })}
+              {!loading && visible.length > 0 && (
+                <ul className={classes.list} aria-label="Agent assets">
+                  {visible.map(asset => {
+                    const ref = parseEntityRef(asset.entityRef);
+                    return (
+                      <li key={asset.entityRef}>
+                        <AssetRow
+                          asset={asset}
+                          to={
+                            assetRoute?.({
+                              kind: ref.kind.toLowerCase(),
+                              namespace: ref.namespace,
+                              name: ref.name,
+                            }) ?? ''
+                          }
+                        />
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </Grid>
           </Grid>
         )}

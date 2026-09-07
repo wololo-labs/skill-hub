@@ -97,9 +97,9 @@ function build(t: Tokens, mode: 'light' | 'dark'): UnifiedTheme {
       // surface is 4.4:1, which misses AA at badge size, so a darker step of
       // the same ramp carries the text at 7.4:1.
       infoText: t.okInk,
-      errorBackground: t.okSurface,
-      warningBackground: t.okSurface,
-      infoBackground: t.okSurface,
+      errorBackground: t.errorSurface,
+      warningBackground: t.warningSurface,
+      infoBackground: t.infoSurface,
       errorText: t.error,
       warningText: t.warning,
       link: t.link,
@@ -132,6 +132,11 @@ function build(t: Tokens, mode: 'light' | 'dark'): UnifiedTheme {
           body: {
             WebkitFontSmoothing: 'antialiased',
             textRendering: 'optimizeLegibility',
+            // Material UI leaves body at its own default grey, which shows
+            // through as an untokenised band behind the app bar and on
+            // overscroll. A theme whose premise is that every neutral is
+            // re-derivable cannot have a third grey it never chose.
+            backgroundColor: t.bg,
           },
           // A keyboard user must always be able to see where they are. Scoped
           // to :focus-visible so a mouse click never paints a ring.
