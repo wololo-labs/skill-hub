@@ -1,15 +1,20 @@
 import { useMemo, useState } from 'react';
 import {
   Box,
+  Collapse,
   Grid,
   IconButton,
   InputAdornment,
   TextField,
   Typography,
   makeStyles,
+  useMediaQuery,
+  useTheme,
 } from '@material-ui/core';
 import SearchIcon from '@material-ui/icons/Search';
 import ClearIcon from '@material-ui/icons/Close';
+import FilterIcon from '@material-ui/icons/FilterList';
+import ExpandIcon from '@material-ui/icons/ExpandMore';
 import {
   Content,
   Header,
@@ -63,6 +68,42 @@ const useStyles = makeStyles(theme => ({
     fontFamily: 'monospace',
     fontSize: '0.95em',
   },
+  filterToggle: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(1),
+    width: '100%',
+    minHeight: 44,
+    padding: theme.spacing(1, 1.5),
+    marginBottom: theme.spacing(1.5),
+    border: `1px solid ${theme.palette.divider}`,
+    borderRadius: theme.shape.borderRadius,
+    background: theme.palette.background.paper,
+    color: theme.palette.text.primary,
+    font: 'inherit',
+    fontSize: 14,
+    fontWeight: 600,
+    cursor: 'pointer',
+    '&:focus-visible': {
+      outline: `2px solid ${theme.palette.primary.main}`,
+      outlineOffset: 1,
+    },
+  },
+  toggleCount: {
+    marginLeft: 'auto',
+    color: theme.palette.textSubtle,
+    fontWeight: 400,
+    fontSize: 13,
+  },
+  chevron: {
+    transition: 'transform 160ms cubic-bezier(0.16, 1, 0.3, 1)',
+  },
+  chevronOpen: {
+    transform: 'rotate(180deg)',
+  },
+  '@media (prefers-reduced-motion: reduce)': {
+    chevron: { transition: 'none' },
+  },
 }));
 
 /**
@@ -84,6 +125,10 @@ export const BrowsePage = () => {
   // config. Losing the link is acceptable, crashing the whole list is not.
   const assetRoute = useRouteRef(assetRouteRef);
   const [facets, setFacets] = useState<Facets>(EMPTY_FACETS);
+  // On a phone the facet list is taller than the viewport, so leaving it open
+  // means scrolling past every filter before reaching a single asset.
+  const narrow = useMediaQuery(useTheme().breakpoints.down('sm'));
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const { value, loading, error } = useAsync(async () => {
     const response = await catalogApi.getEntities({
@@ -97,10 +142,12 @@ export const BrowsePage = () => {
 
   const assets = useMemo<Asset[]>(() => value ?? [], [value]);
   const visible = useMemo(() => applyFacets(assets, facets), [assets, facets]);
-  const filtered =
-    facets.text.trim() !== '' ||
-    facets.type.length + facets.score.length + facets.harness.length + facets.owner.length >
-      0;
+  const activeFacets =
+    facets.type.length +
+    facets.score.length +
+    facets.harness.length +
+    facets.owner.length;
+  const filtered = facets.text.trim() !== '' || activeFacets > 0;
 
   return (
     <Page themeId="home">
@@ -120,11 +167,52 @@ export const BrowsePage = () => {
         {!error && (
           <Grid container spacing={4}>
             <Grid item xs={12} md={3}>
-              <FacetPanel assets={assets} facets={facets} onChange={setFacets} />
+              {narrow ? (
+                <>
+                  <button
+                    type="button"
+                    className={classes.filterToggle}
+                    aria-expanded={filtersOpen}
+                    aria-controls="skill-hub-facets"
+                    onClick={() => setFiltersOpen(open => !open)}
+                  >
+                    <FilterIcon fontSize="small" />
+                    Filters
+                    <span className={classes.toggleCount}>
+                      {activeFacets > 0 ? `${activeFacets} active` : 'none'}
+                    </span>
+                    <ExpandIcon
+                      fontSize="small"
+                      className={`${classes.chevron} ${
+                        filtersOpen ? classes.chevronOpen : ''
+                      }`}
+                    />
+                  </button>
+                  <div id="skill-hub-facets">
+                    <Collapse in={filtersOpen}>
+                      <FacetPanel
+                        assets={assets}
+                        facets={facets}
+                        onChange={setFacets}
+                      />
+                    </Collapse>
+                  </div>
+                </>
+              ) : (
+                <FacetPanel
+                  assets={assets}
+                  facets={facets}
+                  onChange={setFacets}
+                />
+              )}
             </Grid>
 
             <Grid item xs={12} md={9}>
               <TextField
+                // Without an explicit id, Material UI renders the label with
+                // no `for`, so the visible label is not the accessible name
+                // and a screen reader announces an unlabelled text box.
+                id="skill-hub-search"
                 className={classes.search}
                 fullWidth
                 variant="outlined"

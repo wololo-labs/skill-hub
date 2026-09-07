@@ -12,6 +12,11 @@ const useStyles = makeStyles(theme => ({
     color: 'inherit',
     transition: 'background-color 140ms cubic-bezier(0.16, 1, 0.3, 1)',
     '&:hover': { backgroundColor: theme.palette.action.hover },
+    '&:focus-visible': {
+      outline: `2px solid ${theme.palette.primary.main}`,
+      outlineOffset: -2,
+      backgroundColor: theme.palette.action.hover,
+    },
     '&:first-child': { borderTop: `1px solid ${theme.palette.divider}` },
   },
   head: {

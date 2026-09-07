@@ -29,6 +29,10 @@ export interface Tokens {
   okSurface: string;
   error: string;
   warning: string;
+  codeSurface: string;
+  codeInk: string;
+  codeComment: string;
+  codeLiteral: string;
   navBg: string;
   navInk: string;
   navSelected: string;
@@ -60,6 +64,13 @@ export const light: Tokens = {
   error: '#BA2B28',
   // oklch(0.560 0.130 70), 4.8:1 on paper
   warning: '#A46400',
+  // The markdown renderer ships a fixed dark code block whose comment colour
+  // is 2.2:1. These replace it. oklch(0.965 0 0) surface, with ink at 12.2:1,
+  // comments at 5.3:1 and literals at 6.6:1.
+  codeSurface: '#F3F3F3',
+  codeInk: '#2E2E2E',
+  codeComment: '#56695C',
+  codeLiteral: '#963633',
   navBg: '#171717',
   navInk: '#B7B7B7',
   navSelected: '#F8F8F8',
@@ -90,6 +101,11 @@ export const dark: Tokens = {
   error: '#F27166',
   // oklch(0.800 0.130 70), 9.2:1 on paper
   warning: '#F3AE58',
+  // oklch(0.235 0 0) surface, ink 12.4:1, comments 6.3:1, literals 7.4:1.
+  codeSurface: '#1E1E1E',
+  codeInk: '#DEDEDE',
+  codeComment: '#90A496',
+  codeLiteral: '#EF958E',
   navBg: '#141414',
   navInk: '#ABABAB',
   navSelected: '#F8F8F8',

@@ -30,6 +30,10 @@ const useStyles = makeStyles(theme => ({
     cursor: 'pointer',
     transition: 'color 120ms ease, border-color 120ms ease',
     '&:hover': { color: theme.palette.text.primary },
+    '&:focus-visible': {
+      outline: `2px solid ${theme.palette.primary.main}`,
+      outlineOffset: 1,
+    },
   },
   harnessOn: {
     borderColor: theme.palette.primary.main,
@@ -61,6 +65,13 @@ const useStyles = makeStyles(theme => ({
     borderRadius: theme.shape.borderRadius,
     border: `1px dashed ${theme.palette.divider}`,
     backgroundColor: theme.palette.background.default,
+  },
+  scoreLink: {
+    // Standalone, so it is a target rather than a word in a sentence.
+    display: 'inline-flex',
+    alignItems: 'center',
+    minHeight: 28,
+    fontSize: 13.5,
   },
   blockedTitle: {
     fontWeight: 600,
@@ -191,7 +202,10 @@ export const InstallPanel = ({ asset }: InstallPanelProps) => {
               becomes installable on the next sync.
             </Typography>
             <Box mt={1.5}>
-              <Link to="https://github.com/wololo-labs/skill-hub/blob/main/docs/SCORING.md">
+              <Link
+                className={classes.scoreLink}
+                to="https://github.com/wololo-labs/skill-hub/blob/main/docs/SCORING.md"
+              >
                 How to score an asset
               </Link>
             </Box>

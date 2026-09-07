@@ -94,6 +94,13 @@ const useStyles = makeStyles(theme => ({
     padding: '3px 7px',
     color: theme.palette.text.primary,
   },
+  back: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    minHeight: 28,
+    padding: theme.spacing(0.25, 0),
+    fontSize: 13.5,
+  },
   lede: {
     fontSize: 15,
     lineHeight: 1.6,
@@ -196,7 +203,9 @@ export const AssetPage = () => {
 
       <Content>
         <Box mb={2}>
-          <Link to={rootRoute?.() ?? '/'}>&larr; All assets</Link>
+          <Link className={classes.back} to={rootRoute?.() ?? '/'}>
+            &larr; All assets
+          </Link>
         </Box>
 
         {asset.description && (

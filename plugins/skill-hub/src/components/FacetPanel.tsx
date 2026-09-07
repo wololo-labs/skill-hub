@@ -52,6 +52,10 @@ const useStyles = makeStyles(theme => ({
     '&:hover': {
       backgroundColor: theme.palette.action.hover,
     },
+    '&:focus-visible': {
+      outline: `2px solid ${theme.palette.primary.main}`,
+      outlineOffset: 1,
+    },
   },
   optionSelected: {
     backgroundColor: theme.palette.action.selected,

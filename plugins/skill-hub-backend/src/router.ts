@@ -26,15 +26,41 @@ const FRONTMATTER = /^---\r?\n[\s\S]*?\r?\n---\s*(?:\r?\n|$)/;
  * the top of the page as if it were prose. The metadata it carries is already
  * on the entity, so it is stripped rather than shown twice.
  *
+ * Headings are pushed down one level, because the page already has an h1 with
+ * the asset's name on it. Without this a document's own title is a second h1
+ * and the page has no single heading, which is exactly the shape a screen
+ * reader cannot navigate.
+ *
  * A file that is not markdown is fenced instead, so a Python hook renders as
  * code rather than as mangled prose.
  */
 export function readableBody(content: string, path: string): string {
   if (/\.(md|markdown)$/i.test(path)) {
-    return content.replace(FRONTMATTER, '');
+    return demoteHeadings(content.replace(FRONTMATTER, ''));
   }
   const language = path.split('.').pop()?.toLowerCase() ?? '';
   return ['```' + language, content.trimEnd(), '```'].join('\n');
+}
+
+/**
+ * Pushes every ATX heading down one level, leaving h6 where it is because
+ * there is nothing below it. Fenced code is left alone: a `#` at the start of
+ * a line inside a shell block is a comment, not a heading.
+ */
+function demoteHeadings(markdown: string): string {
+  let fenced = false;
+  return markdown
+    .split('\n')
+    .map(line => {
+      if (/^\s*(```|~~~)/.test(line)) {
+        fenced = !fenced;
+        return line;
+      }
+      if (fenced) return line;
+      const heading = /^(#{1,5})(\s+\S)/.exec(line);
+      return heading ? `#${line}` : line;
+    })
+    .join('\n');
 }
 
 export interface BodyRequest {

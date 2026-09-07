@@ -2,8 +2,12 @@ import { makeStyles } from '@material-ui/core';
 
 const useStyles = makeStyles(theme => ({
   root: {
-    display: 'flex',
+    display: 'inline-flex',
     alignItems: 'baseline',
+    // A standalone navigation target, so it carries a real hit area rather
+    // than only the height of its own text.
+    minHeight: 32,
+    paddingTop: 6,
     gap: 6,
     fontWeight: 600,
     fontSize: 17,

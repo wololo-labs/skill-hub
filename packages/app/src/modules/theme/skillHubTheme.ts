@@ -24,6 +24,16 @@ const heading = (fontSize: string, fontWeight: number, marginBottom: number) => 
   letterSpacing: '-0.011em',
 });
 
+/**
+ * One focus ring, used everywhere. Two pixels of the primary at an offset,
+ * which clears 3:1 against every surface it lands on in both themes.
+ */
+const FOCUS_RING = (t: Tokens) => ({
+  outline: `2px solid ${t.primary}`,
+  outlineOffset: '2px',
+  borderRadius: '3px',
+});
+
 const flat = (t: Tokens) => ({
   colors: [t.paper],
   shape: 'none',
@@ -83,11 +93,14 @@ function build(t: Tokens, mode: 'light' | 'dark'): UnifiedTheme {
       textVerySubtle: t.border,
       textSubtle: t.subtle,
       highlight: t.okSurface,
+      // The badge reads its pass ink from here: status.ok on the highlight
+      // surface is 4.4:1, which misses AA at badge size, so a darker step of
+      // the same ramp carries the text at 7.4:1.
+      infoText: t.okInk,
       errorBackground: t.okSurface,
       warningBackground: t.okSurface,
       infoBackground: t.okSurface,
       errorText: t.error,
-      infoText: t.primary,
       warningText: t.warning,
       link: t.link,
       linkHover: t.linkHover,
@@ -120,19 +133,44 @@ function build(t: Tokens, mode: 'light' | 'dark'): UnifiedTheme {
             WebkitFontSmoothing: 'antialiased',
             textRendering: 'optimizeLegibility',
           },
-          // A keyboard user must always be able to see where they are. This
-          // replaces the browser default rather than removing it, and it is
-          // scoped to :focus-visible so a mouse click does not paint a ring.
-          '*:focus-visible': {
-            outline: `2px solid ${t.primary}`,
-            outlineOffset: 2,
-            borderRadius: 2,
-          },
+          // A keyboard user must always be able to see where they are. Scoped
+          // to :focus-visible so a mouse click never paints a ring.
+          //
+          // This global alone is not enough. Material UI v4's ButtonBase sets
+          // `outline: 0` on its own root class, which ties on specificity and
+          // wins on source order, so every button would focus invisibly. The
+          // component override below is what actually reaches them.
+          '*:focus-visible': FOCUS_RING(t),
+        },
+      },
+      MuiButtonBase: {
+        styleOverrides: {
+          root: { '&:focus-visible': FOCUS_RING(t) },
         },
       },
       MuiButton: {
         styleOverrides: {
-          root: { textTransform: 'none', fontWeight: 600, letterSpacing: 0 },
+          root: {
+            textTransform: 'none',
+            fontWeight: 600,
+            letterSpacing: 0,
+            '&:focus-visible': FOCUS_RING(t),
+          },
+        },
+      },
+      MuiIconButton: {
+        styleOverrides: {
+          root: { '&:focus-visible': FOCUS_RING(t) },
+        },
+      },
+      MuiLink: {
+        styleOverrides: {
+          root: { '&:focus-visible': FOCUS_RING(t) },
+        },
+      },
+      MuiOutlinedInput: {
+        styleOverrides: {
+          root: { '&:focus-within': FOCUS_RING(t) },
         },
       },
       MuiChip: {
@@ -177,6 +215,55 @@ function build(t: Tokens, mode: 'light' | 'dark'): UnifiedTheme {
       BackstageContent: {
         styleOverrides: {
           root: { backgroundColor: t.bg },
+        },
+      },
+      BackstageMarkdownContent: {
+        styleOverrides: {
+          // The markdown renderer highlights code with a fixed dark palette
+          // written as inline styles, so it survives a theme change and it
+          // fails contrast: its comment colour measures 2.2:1 on its own
+          // background. Inline styles can only be beaten with !important.
+          //
+          // Every token is neutralised to the code ink first, then the two
+          // roles worth keeping are re-coloured from verified values. A
+          // language this renderer highlights differently therefore degrades
+          // to readable rather than to unreadable.
+          markdown: {
+            '& pre': {
+              background: t.codeSurface,
+              color: t.codeInk,
+              border: `1px solid ${t.border}`,
+              borderRadius: 6,
+              padding: 0,
+              overflow: 'hidden',
+            },
+            // The renderer puts its own surface, padding and scroll container
+            // on the inner code element as inline styles, which is why this
+            // has to shout: without it the block is a box inside a box, and
+            // the inner one is the fixed dark palette.
+            '& pre > code': {
+              background: 'transparent !important',
+              color: `${t.codeInk} !important`,
+              padding: '12px 14px !important',
+              display: 'block !important',
+              overflowX: 'auto !important',
+            },
+            '& pre span': { color: `${t.codeInk} !important` },
+            '& pre [style*="rgb(119, 119, 119)"], & pre [style*="rgb(64, 128, 128)"]': {
+              color: `${t.codeComment} !important`,
+              fontStyle: 'italic',
+            },
+            '& pre [style*="rgb(221, 136, 136)"], & pre [style*="rgb(186, 33, 33)"]': {
+              color: `${t.codeLiteral} !important`,
+            },
+            '& code': {
+              backgroundColor: t.codeSurface,
+              color: t.codeInk,
+              padding: '1px 4px',
+              borderRadius: 3,
+            },
+
+          },
         },
       },
     },

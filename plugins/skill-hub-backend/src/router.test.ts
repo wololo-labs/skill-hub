@@ -8,13 +8,14 @@ describe('readableBody', () => {
       'skills/commit/SKILL.md',
     );
     // Markdown renders `---\nname: x\n---` as a setext heading, so leaving it
-    // in puts the metadata on the page as if it were prose.
-    expect(body).toBe('# Commit\n\nRunbook.\n');
+    // in puts the metadata on the page as if it were prose. The heading is
+    // one level down because the page already carries the h1.
+    expect(body).toBe('## Commit\n\nRunbook.\n');
   });
 
-  it('leaves markdown without frontmatter alone', () => {
+  it('leaves the prose of markdown without frontmatter alone', () => {
     expect(readableBody('# Readme\n\nHello.\n', 'README.md')).toBe(
-      '# Readme\n\nHello.\n',
+      '## Readme\n\nHello.\n',
     );
   });
 
@@ -25,8 +26,9 @@ describe('readableBody', () => {
   });
 
   it('does not mistake a horizontal rule for frontmatter', () => {
-    const body = '# Title\n\n---\n\nMore prose.\n';
-    expect(readableBody(body, 'README.md')).toBe(body);
+    expect(readableBody('# Title\n\n---\n\nMore prose.\n', 'README.md')).toBe(
+      '## Title\n\n---\n\nMore prose.\n',
+    );
   });
 });
 
@@ -94,5 +96,28 @@ describe('refuseUnlessPublished', () => {
     expect(
       refuseUnlessPublished({ ...good, assetPath: undefined }, published),
     ).toMatch(/outside the asset/);
+  });
+});
+
+describe('readableBody heading levels', () => {
+  it('pushes the document down a level, because the page already has an h1', () => {
+    expect(
+      readableBody('# Commit\n\nProse.\n\n## Steps\n\n### Detail\n', 'a/SKILL.md'),
+    ).toBe('## Commit\n\nProse.\n\n### Steps\n\n#### Detail\n');
+  });
+
+  it('leaves h6 alone, since there is nothing under it', () => {
+    expect(readableBody('###### Deep\n', 'a/README.md')).toBe('###### Deep\n');
+  });
+
+  it('does not touch a comment inside a fenced block', () => {
+    const body = '# Title\n\n```bash\n# not a heading\ngit status\n```\n\n# Second\n';
+    expect(readableBody(body, 'a/README.md')).toBe(
+      '## Title\n\n```bash\n# not a heading\ngit status\n```\n\n## Second\n',
+    );
+  });
+
+  it('leaves a bare hash alone', () => {
+    expect(readableBody('#\n#hashtag\n', 'a/README.md')).toBe('#\n#hashtag\n');
   });
 });

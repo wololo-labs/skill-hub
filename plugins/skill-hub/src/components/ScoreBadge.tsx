@@ -24,7 +24,9 @@ const useStyles = makeStyles(theme => ({
   // The verdict is the only place on this surface that earns a filled colour.
   pass: {
     backgroundColor: theme.palette.highlight,
-    color: theme.palette.status.ok,
+    // The darker end of the ok ramp, not status.ok itself: status.ok on the
+    // highlight surface measures 4.43:1, which misses AA at this size.
+    color: theme.palette.infoText,
     borderColor: theme.palette.status.ok,
   },
   fail: {
