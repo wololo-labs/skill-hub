@@ -229,40 +229,62 @@ function build(t: Tokens, mode: 'light' | 'dark'): UnifiedTheme {
           // language this renderer highlights differently therefore degrades
           // to readable rather than to unreadable.
           markdown: {
+            // The renderer wraps a highlighted block as pre > div > pre and
+            // puts its own surface, padding and scroll container on the inner
+            // one as inline styles. Only the inner element can be trusted to
+            // be the code surface, and only !important reaches it.
             '& pre': {
               background: t.codeSurface,
               color: t.codeInk,
               border: `1px solid ${t.border}`,
               borderRadius: 6,
-              padding: 0,
-              overflow: 'hidden',
+              padding: '12px 14px',
+              overflowX: 'auto',
+              margin: '16px 0',
             },
-            // The renderer puts its own surface, padding and scroll container
-            // on the inner code element as inline styles, which is why this
-            // has to shout: without it the block is a box inside a box, and
-            // the inner one is the fixed dark palette.
-            '& pre > code': {
-              background: 'transparent !important',
+            // When there is an inner block, the outer one is a pass-through
+            // rather than a second box around the first.
+            '& pre:has(pre)': {
+              background: 'transparent',
+              border: 'none',
+              padding: 0,
+              overflow: 'visible',
+            },
+            '& pre pre': {
+              background: `${t.codeSurface} !important`,
               color: `${t.codeInk} !important`,
+              border: `1px solid ${t.border} !important`,
+              borderRadius: '6px !important',
               padding: '12px 14px !important',
+              margin: '0 !important',
               display: 'block !important',
               overflowX: 'auto !important',
             },
+            // Every token is neutralised to the code ink, then the two roles
+            // worth keeping are re-coloured from verified values. A language
+            // this renderer highlights differently therefore degrades to
+            // readable rather than to unreadable.
             '& pre span': { color: `${t.codeInk} !important` },
-            '& pre [style*="rgb(119, 119, 119)"], & pre [style*="rgb(64, 128, 128)"]': {
-              color: `${t.codeComment} !important`,
-              fontStyle: 'italic',
-            },
-            '& pre [style*="rgb(221, 136, 136)"], & pre [style*="rgb(186, 33, 33)"]': {
-              color: `${t.codeLiteral} !important`,
-            },
+            '& pre [style*="rgb(119, 119, 119)"], & pre [style*="rgb(64, 128, 128)"]':
+              {
+                color: `${t.codeComment} !important`,
+                fontStyle: 'italic',
+              },
+            '& pre [style*="rgb(221, 136, 136)"], & pre [style*="rgb(186, 33, 33)"], & pre [style*="rgb(33, 145, 97)"], & pre [style*="rgb(0, 134, 179)"]':
+              {
+                color: `${t.codeLiteral} !important`,
+              },
+            // Inline code in prose, not a block.
             '& code': {
               backgroundColor: t.codeSurface,
               color: t.codeInk,
               padding: '1px 4px',
               borderRadius: 3,
             },
-
+            '& pre code': {
+              backgroundColor: 'transparent',
+              padding: 0,
+            },
           },
         },
       },
