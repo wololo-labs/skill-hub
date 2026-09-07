@@ -90,10 +90,6 @@ const useStyles = makeStyles(theme => ({
     fontSize: 12,
     flex: '0 0 auto',
   },
-  empty: {
-    color: theme.palette.textSubtle,
-    fontSize: 13,
-  },
   '@media (prefers-reduced-motion: reduce)': {
     option: { transition: 'none' },
   },
@@ -164,6 +160,10 @@ export const FacetPanel = ({ assets, facets, onChange }: FacetPanelProps) => {
         );
         const selected = facets[group.key] as string[];
 
+        // A dimension every asset shares offers nothing to filter by, so the
+        // whole group goes rather than leaving a heading over an apology.
+        if (values.length === 0) return null;
+
         return (
           <Box
             key={group.key}
@@ -175,12 +175,7 @@ export const FacetPanel = ({ assets, facets, onChange }: FacetPanelProps) => {
               {group.title}
             </Typography>
 
-            {values.length === 0 ? (
-              <Typography className={classes.empty}>
-                Nothing left to filter by.
-              </Typography>
-            ) : (
-              values.map(([value, count]) => {
+            {values.map(([value, count]) => {
                 const on = selected.includes(value);
                 return (
                   <button
@@ -200,9 +195,8 @@ export const FacetPanel = ({ assets, facets, onChange }: FacetPanelProps) => {
                     </span>
                     <span className={classes.count}>{count}</span>
                   </button>
-                );
-              })
-            )}
+              );
+            })}
           </Box>
         );
       })}

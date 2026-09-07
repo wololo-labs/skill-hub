@@ -67,18 +67,15 @@ skillHub:
     token: ${MISSION_CONTROL_TOKEN}
 
 auth:
+  # Guest only by default, so a clean clone boots with no credentials at all.
+  # The GitHub provider is added by the container entrypoint when a client id
+  # is present: Backstage initialises whatever provider block it finds and
+  # refuses one without a client id, so declaring it unconditionally is what
+  # stops an unconfigured checkout from starting.
+  #
+  # For local development, put the same block in app-config.local.yaml.
   providers:
     guest: {}
-    github:
-      development:
-        clientId: ${AUTH_GITHUB_CLIENT_ID}
-        clientSecret: ${AUTH_GITHUB_CLIENT_SECRET}
-        signIn:
-          resolvers:
-            - resolver: usernameMatchingUserEntityName
-              # Sign in works before anyone has modelled the org in the
-              # catalogue: an unknown GitHub login still gets an identity.
-              dangerouslyAllowSignInWithoutUserInCatalog: true
   clientIdMetadataDocuments:
     enabled: false
 
