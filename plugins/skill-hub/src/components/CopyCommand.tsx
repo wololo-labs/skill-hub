@@ -57,6 +57,7 @@ export const CopyCommand = ({ text, label, onCopied }: CopyCommandProps) => {
   };
 
   const copied = state === 'copied';
+  const caption = { idle: 'Copy', copied: 'Copied', failed: 'Failed' }[state];
   return (
     <Tooltip
       title={
@@ -77,7 +78,7 @@ export const CopyCommand = ({ text, label, onCopied }: CopyCommandProps) => {
         ) : (
           <CopyIcon className={classes.icon} />
         )}
-        {copied ? 'Copied' : state === 'failed' ? 'Failed' : 'Copy'}
+        {caption}
       </Button>
     </Tooltip>
   );

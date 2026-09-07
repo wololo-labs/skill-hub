@@ -363,6 +363,15 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
     }
   }
 
+  /**
+   * The system an asset belongs to: the pack that contains it if there is one,
+   * otherwise whatever the manifest declared, otherwise nothing.
+   */
+  const systemOf = (pkg: PackageInfo | undefined) => {
+    const system = pkg?.name ?? manifest.system;
+    return system ? { system } : {};
+  };
+
   const owningPackage = (path: string): PackageInfo | undefined =>
     packages
       .filter(p => p.dir === '' || path.startsWith(`${p.dir}/`))
@@ -410,7 +419,7 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
         type: 'mcp-server',
         lifecycle: 'experimental',
         owner,
-        ...(pkg ? { system: pkg.name } : manifest.system ? { system: manifest.system } : {}),
+        ...systemOf(pkg),
         definition: JSON.stringify(server, null, 2),
       },
     });
@@ -471,11 +480,7 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
           type: SPEC_TYPE_BY_KIND[kind],
           lifecycle: 'experimental',
           owner,
-          ...(pkg
-            ? { system: pkg.name }
-            : manifest.system
-              ? { system: manifest.system }
-              : {}),
+          ...systemOf(pkg),
           agents: manifest.harnesses,
         },
       });

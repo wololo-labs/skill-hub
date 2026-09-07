@@ -28,7 +28,7 @@ const heading = (fontSize: string, fontWeight: number, marginBottom: number) => 
  * One focus ring, used everywhere. Two pixels of the primary at an offset,
  * which clears 3:1 against every surface it lands on in both themes.
  */
-const FOCUS_RING = (t: Tokens) => ({
+const focusRing = (t: Tokens) => ({
   outline: `2px solid ${t.primary}`,
   outlineOffset: '2px',
   borderRadius: '3px',
@@ -140,12 +140,12 @@ function build(t: Tokens, mode: 'light' | 'dark'): UnifiedTheme {
           // `outline: 0` on its own root class, which ties on specificity and
           // wins on source order, so every button would focus invisibly. The
           // component override below is what actually reaches them.
-          '*:focus-visible': FOCUS_RING(t),
+          '*:focus-visible': focusRing(t),
         },
       },
       MuiButtonBase: {
         styleOverrides: {
-          root: { '&:focus-visible': FOCUS_RING(t) },
+          root: { '&:focus-visible': focusRing(t) },
         },
       },
       MuiButton: {
@@ -154,23 +154,23 @@ function build(t: Tokens, mode: 'light' | 'dark'): UnifiedTheme {
             textTransform: 'none',
             fontWeight: 600,
             letterSpacing: 0,
-            '&:focus-visible': FOCUS_RING(t),
+            '&:focus-visible': focusRing(t),
           },
         },
       },
       MuiIconButton: {
         styleOverrides: {
-          root: { '&:focus-visible': FOCUS_RING(t) },
+          root: { '&:focus-visible': focusRing(t) },
         },
       },
       MuiLink: {
         styleOverrides: {
-          root: { '&:focus-visible': FOCUS_RING(t) },
+          root: { '&:focus-visible': focusRing(t) },
         },
       },
       MuiOutlinedInput: {
         styleOverrides: {
-          root: { '&:focus-within': FOCUS_RING(t) },
+          root: { '&:focus-within': focusRing(t) },
         },
       },
       MuiChip: {

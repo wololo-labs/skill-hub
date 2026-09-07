@@ -127,18 +127,17 @@ export function facetCounts(
   facets: Facets,
   dimension: keyof Omit<Facets, 'text'>,
 ): Map<string, number> {
+  const values: Record<keyof Omit<Facets, 'text'>, (a: Asset) => string[]> = {
+    type: a => [a.type],
+    owner: a => [a.owner],
+    harness: a => a.harnesses,
+    score: a => [scoreState(a)],
+  };
+
   const others = { ...facets, [dimension]: [] } as Facets;
   const counts = new Map<string, number>();
   for (const asset of applyFacets(assets, others)) {
-    const values =
-      dimension === 'type'
-        ? [asset.type]
-        : dimension === 'owner'
-          ? [asset.owner]
-          : dimension === 'harness'
-            ? asset.harnesses
-            : [scoreState(asset)];
-    for (const value of values) {
+    for (const value of values[dimension](asset)) {
       counts.set(value, (counts.get(value) ?? 0) + 1);
     }
   }

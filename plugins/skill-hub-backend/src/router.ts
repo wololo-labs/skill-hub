@@ -39,7 +39,7 @@ export function readableBody(content: string, path: string): string {
     return demoteHeadings(content.replace(FRONTMATTER, ''));
   }
   const language = path.split('.').pop()?.toLowerCase() ?? '';
-  return ['```' + language, content.trimEnd(), '```'].join('\n');
+  return `\`\`\`${language}\n${content.trimEnd()}\n\`\`\``;
 }
 
 /**

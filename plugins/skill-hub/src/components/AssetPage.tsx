@@ -123,6 +123,25 @@ const useStyles = makeStyles(theme => ({
   },
 }));
 
+/** One labelled fact in the provenance or score table. */
+const Row = ({ label, value }: { label: string; value: React.ReactNode }) => {
+  const classes = useStyles();
+  return (
+    <TableRow>
+      <TableCell
+        component="th"
+        scope="row"
+        className={`${classes.cell} ${classes.key}`}
+      >
+        {label}
+      </TableCell>
+      <TableCell className={`${classes.cell} ${classes.value}`}>
+        {value}
+      </TableCell>
+    </TableRow>
+  );
+};
+
 /** The asset itself: what it is, where it came from, what it scored. */
 export const AssetPage = () => {
   const classes = useStyles();
@@ -346,23 +365,5 @@ export const AssetPage = () => {
         </div>
       </Content>
     </Page>
-  );
-};
-
-const Row = ({ label, value }: { label: string; value: React.ReactNode }) => {
-  const classes = useStyles();
-  return (
-    <TableRow>
-      <TableCell
-        component="th"
-        scope="row"
-        className={`${classes.cell} ${classes.key}`}
-      >
-        {label}
-      </TableCell>
-      <TableCell className={`${classes.cell} ${classes.value}`}>
-        {value}
-      </TableCell>
-    </TableRow>
   );
 };
