@@ -41,6 +41,8 @@ backend on 7007, with an in-memory database.
 | `plugins/skill-hub-common` | the annotation vocabulary both halves agree on |
 | `docker-compose.yml` | app plus Postgres, one command |
 | `docs/SPEC.md` | the agreed specification this build follows |
+| `docs/DISCOVERY-PROOF.md` | the discovery and receipt proofs, from the live run |
+| `docs/INSTALL-PROOF.md` | the install commands, run for real |
 | `docs/SCORING.md` | how an asset gets a score, and why the gate exists |
 | `PRODUCT.md` | who this is for, and what it must not become |
 
@@ -148,4 +150,8 @@ own credential to read a private repository.
 - **Compose runs one Postgres with default credentials** and guest identity.
   Local use only; both are named in `app-config.production.yaml`.
 - **Browse filters in the browser** over the full result set, which is what
-  makes the facet counts exact. The ceiling is a few thousand assets.
+  makes the facet counts exact and the interaction instant. The list is not
+  virtualised, so the ceiling is a few thousand assets; past that this moves
+  to catalogue facets and a windowed list.
+- **Guest identity does not survive a hard reload**, which is stock Backstage
+  behaviour for the guest provider. GitHub OAuth does.
