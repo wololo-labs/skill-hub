@@ -91,6 +91,19 @@ export const EMPTY_FACETS: Facets = {
   text: '',
 };
 
+/**
+ * Scored assets first, then alphabetically.
+ *
+ * The catalogue's whole claim is that the score decides whether an asset can
+ * be installed, so the assets that clear the gate are the ones worth reading
+ * first. The facet counts still state the true ratio, so nothing is hidden by
+ * this: an estate that is mostly unscored still says so, at the top.
+ */
+export function byScoreThenName(a: Asset, b: Asset): number {
+  const scored = Number(Boolean(b.score)) - Number(Boolean(a.score));
+  return scored !== 0 ? scored : a.title.localeCompare(b.title);
+}
+
 export function applyFacets(assets: Asset[], facets: Facets): Asset[] {
   const text = facets.text.trim().toLowerCase();
   return assets.filter(asset => {
@@ -116,6 +129,11 @@ export function applyFacets(assets: Asset[], facets: Facets): Asset[] {
     }
     return true;
   });
+}
+
+/** The list as the browse page shows it: filtered, then ordered. */
+export function visibleAssets(assets: Asset[], facets: Facets): Asset[] {
+  return applyFacets(assets, facets).sort(byScoreThenName);
 }
 
 /**

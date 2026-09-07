@@ -31,7 +31,7 @@ import {
 import { parseEntityRef } from '@backstage/catalog-model';
 import useAsync from 'react-use/esm/useAsync';
 import { ANNOTATION_HARNESSES } from '@internal/plugin-skill-hub-common';
-import { Asset, EMPTY_FACETS, Facets, applyFacets, toAsset } from '../model';
+import { Asset, EMPTY_FACETS, Facets, toAsset, visibleAssets } from '../model';
 import { assetRouteRef } from '../plugin';
 import { AssetRow } from './AssetRow';
 import { FacetPanel } from './FacetPanel';
@@ -141,7 +141,7 @@ export const BrowsePage = () => {
   }, [catalogApi]);
 
   const assets = useMemo<Asset[]>(() => value ?? [], [value]);
-  const visible = useMemo(() => applyFacets(assets, facets), [assets, facets]);
+  const visible = useMemo(() => visibleAssets(assets, facets), [assets, facets]);
   const activeFacets =
     facets.type.length +
     facets.score.length +
