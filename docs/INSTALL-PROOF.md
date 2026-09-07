@@ -1,5 +1,24 @@
 # Install proof
 
+## The gesture, driven in a real browser
+
+Before the commands below, the panel itself. Chromium against the running hub,
+clipboard read back rather than assumed:
+
+```
+harness picked      Codex
+clipboard contains  apm install 'stevengonsalvez/ainb-toolkit/packages/qe-agent-pack
+                    #937cc70d4a371e4189e891a113fe5374eaefaaa9' --target codex
+button reports      Copied
+receipt delivered   {"actor":"user:development/guest",
+                     "ref":"api:stevengonsalvez-ainb-toolkit/playwright-test",
+                     "harness":"codex","verdict":"PASS"}
+```
+
+On an unscored asset the same page has zero copy buttons and says
+`Install is blocked until this asset has a score`. The gate is the absence of a
+control, not a control that fails when pressed.
+
 The install panel hands over one command per harness. These are those exact
 commands, run for real against APM CLI 0.29.0 from empty directories under a
 throwaway `HOME`, on 2026-09-06. Nothing here is reconstructed: every command
