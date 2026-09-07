@@ -46,7 +46,9 @@ RUN yarn workspaces focus --all --production && rm -rf "$(yarn cache clean)"
 COPY --from=build --chown=node:node /app/examples ./examples
 COPY --from=build --chown=node:node /app/packages/backend/dist/bundle.tar.gz ./
 COPY --chown=node:node app-config.yaml app-config.production.yaml ./
+COPY --chown=node:node docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN tar xzf bundle.tar.gz && rm bundle.tar.gz
 
 EXPOSE 7007
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["node", "packages/backend", "--config", "app-config.yaml", "--config", "app-config.production.yaml"]

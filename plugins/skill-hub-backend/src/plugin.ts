@@ -11,6 +11,15 @@ import { skillHubStatusServiceRef } from './status';
 /**
  * The skill-hub HTTP surface: provider status, asset bodies, install receipts.
  */
+/** An empty configured value means the operator left it blank, so: absent. */
+function optionalText(
+  config: { getOptional(key: string): unknown } | undefined,
+  key: string,
+): string | undefined {
+  const value = config?.getOptional(key);
+  return typeof value === 'string' && value.trim() !== '' ? value : undefined;
+}
+
 export const skillHubPlugin = createBackendPlugin({
   pluginId: 'skill-hub',
   register(env) {
@@ -39,8 +48,11 @@ export const skillHubPlugin = createBackendPlugin({
         const missionControl = config.getOptionalConfig(
           'skillHub.missionControl',
         );
-        const baseUrl = missionControl?.getOptionalString('baseUrl');
-        const token = missionControl?.getOptionalString('token');
+        // Read through a tolerant helper: an empty value is absent, not a
+        // string of length zero. Compose cannot omit an environment variable,
+        // so an unconfigured Mission Control arrives as '' rather than unset.
+        const baseUrl = optionalText(missionControl, 'baseUrl');
+        const token = optionalText(missionControl, 'token');
         const receipts = new ReceiptQueue({
           logger,
           config: baseUrl && token ? { baseUrl, token } : undefined,
