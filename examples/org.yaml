@@ -1,0 +1,32 @@
+# Minimal org data so ownership resolves to something real on the browse page.
+# Real identity comes from GitHub OAuth once a client id is configured; these
+# entities are what a signed-in login is matched against.
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: team-ai-platform
+  title: AI platform
+  description: "Owns the agent asset estate: skills, agents, hooks and packs."
+spec:
+  type: team
+  children: []
+---
+apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: stevengonsalvez
+spec:
+  memberOf: [team-ai-platform]
+---
+apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  # The guest provider resolves sign-in to user:development/guest, so the entity
+  # has to live in that namespace. Without it the backend asks the catalogue for
+  # a user that is not there on every request, which answers 404 and fills the
+  # log with noise that reads like a fault.
+  name: guest
+  namespace: development
+spec:
+  memberOf: [default/team-ai-platform]

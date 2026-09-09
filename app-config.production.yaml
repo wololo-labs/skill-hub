@@ -1,0 +1,38 @@
+app:
+  # The app is served by the backend in this deployment, so both share a URL.
+  baseUrl: ${APP_BASE_URL}
+
+backend:
+  baseUrl: ${APP_BASE_URL}
+  listen: ':7007'
+  cors:
+    origin: ${APP_BASE_URL}
+  database:
+    client: pg
+    connection:
+      host: ${POSTGRES_HOST}
+      port: ${POSTGRES_PORT}
+      user: ${POSTGRES_USER}
+      password: ${POSTGRES_PASSWORD}
+
+auth:
+  # The Compose stack is a local demo, so it boots on guest identity with no
+  # OAuth application to register first. Guest is enabled here deliberately
+  # and explicitly, and it is the first thing to remove when this is put
+  # anywhere a browser other than yours can reach.
+  #
+  # Setting AUTH_GITHUB_CLIENT_ID and AUTH_GITHUB_CLIENT_SECRET adds the
+  # GitHub provider alongside it, which is what puts a real login on the
+  # install receipt.
+  providers:
+    guest:
+      dangerouslyAllowOutsideDevelopment: true
+
+catalog:
+  locations:
+    # File locations are relative to the backend process, which is the image
+    # root in a container.
+    - type: file
+      target: ./examples/org.yaml
+      rules:
+        - allow: [User, Group]

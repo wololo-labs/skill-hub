@@ -1,0 +1,45 @@
+# One command from a clean clone: Postgres, then the hub on 7007.
+#
+# Every secret arrives through the environment; nothing sensitive lives in
+# this file or anywhere else in the repository.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-backstage}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-backstage}
+      POSTGRES_DB: backstage
+    volumes:
+      - skill-hub-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-backstage}']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  skill-hub:
+    build:
+      context: .
+    ports:
+      # Loopback only. The hub trusts guest sign-in, and guest sign-in trusts
+      # whoever can open the page, so nothing outside this machine should be
+      # able to reach it. Publishing on 0.0.0.0 here is what the guest guard in
+      # the backend refuses to start alongside.
+      - '127.0.0.1:7007:7007'
+    environment:
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:7007}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      AUTH_GITHUB_CLIENT_ID: ${AUTH_GITHUB_CLIENT_ID:-}
+      AUTH_GITHUB_CLIENT_SECRET: ${AUTH_GITHUB_CLIENT_SECRET:-}
+      MISSION_CONTROL_BASE_URL: ${MISSION_CONTROL_BASE_URL:-}
+      MISSION_CONTROL_TOKEN: ${MISSION_CONTROL_TOKEN:-}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: '5432'
+      POSTGRES_USER: ${POSTGRES_USER:-backstage}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-backstage}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  skill-hub-postgres:

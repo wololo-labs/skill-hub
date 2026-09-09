@@ -1,0 +1,95 @@
+app:
+  title: skill hub
+  baseUrl: http://localhost:3000
+
+  # Extensions are discovered from packages/app/package.json dependencies.
+  packages: all
+
+  extensions:
+    # The hub opens on the asset browser, not on the software catalogue. The
+    # stock catalogue stays available at /catalog for anyone who wants the
+    # raw entity view.
+    - page:skill-hub/browse:
+        config:
+          path: /
+    - page:catalog:
+        config:
+          path: /catalog
+
+    # The hub ships its own light and dark themes, both verified for contrast.
+    # Backstage's stock pair is switched off so the theme picker offers two
+    # deliberate choices rather than four.
+    - theme:app/light: false
+    - theme:app/dark: false
+
+organization:
+  name: wololo labs
+
+backend:
+  baseUrl: http://localhost:7007
+  listen:
+    port: 7007
+  csp:
+    connect-src: ["'self'", 'http:', 'https:']
+  cors:
+    origin: http://localhost:3000
+    methods: [GET, HEAD, PATCH, POST, PUT, DELETE]
+    credentials: true
+  # Local development only. The Compose deployment uses Postgres, configured
+  # in app-config.production.yaml.
+  database:
+    client: better-sqlite3
+    connection: ':memory:'
+
+integrations:
+  github:
+    - host: github.com
+      # Read-only token, scoped to public repos and the owners listed under
+      # skillHub.owners. Supplied through the environment, never committed.
+      token: ${GITHUB_TOKEN}
+
+# The agent asset hub. Discovery is manifest-only: a repository joins the
+# catalogue by adding .agent-assets.yaml to its root, and leaves by removing
+# it. No topic, no code search, no per-repo Backstage configuration.
+skillHub:
+  owners:
+    - stevengonsalvez
+    - wololo-labs
+  schedule:
+    frequency:
+      minutes: 10
+    timeout:
+      minutes: 9
+    initialDelay:
+      seconds: 15
+  missionControl:
+    baseUrl: ${MISSION_CONTROL_BASE_URL}
+    token: ${MISSION_CONTROL_TOKEN}
+
+auth:
+  # Guest only by default, so a clean clone boots with no credentials at all.
+  # The GitHub provider is added by the container entrypoint when a client id
+  # is present: Backstage initialises whatever provider block it finds and
+  # refuses one without a client id, so declaring it unconditionally is what
+  # stops an unconfigured checkout from starting.
+  #
+  # For local development, put the same block in app-config.local.yaml.
+  providers:
+    guest: {}
+  clientIdMetadataDocuments:
+    enabled: false
+
+catalog:
+  import:
+    entityFilename: catalog-info.yaml
+    pullRequestBranchName: backstage-integration
+  rules:
+    - allow: [Component, System, API, Resource, Location, AiResource, User, Group]
+  locations:
+    - type: file
+      target: ../../examples/org.yaml
+      rules:
+        - allow: [User, Group]
+
+permission:
+  enabled: true
