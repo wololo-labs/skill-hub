@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { Box, Typography, makeStyles } from '@material-ui/core';
 import { InfoCard, Link } from '@backstage/core-components';
 import { useApi } from '@backstage/core-plugin-api';
-import { HARNESSES } from '@internal/plugin-skill-hub-common';
+import { HARNESSES, passedGate } from '@internal/plugin-skill-hub-common';
 import { Asset } from '../model';
 import { skillHubApiRef } from '../api';
 import { CopyCommand } from './CopyCommand';
@@ -159,6 +159,30 @@ export interface InstallPanelProps {
  * already knows the difference, so it asks for that to be acknowledged before
  * it hands anything over.
  */
+/**
+ * Why the command is not on offer. Three different situations end here and the
+ * difference matters to whoever is reading: nobody measured this, somebody
+ * measured it and it failed, or it passed against a different tree.
+ */
+function blocked(failed: boolean, passed: boolean): { title: string; body: string } {
+  if (failed) {
+    return {
+      title: 'Install is blocked: the eval gate failed',
+      body: 'The gate that ran against this asset did not pass, so the measurement above is a record of it not working. Fix the asset and publish a passing report, and it becomes installable on the next sync.',
+    };
+  }
+  if (passed) {
+    return {
+      title: 'Confirm you want a command the score does not cover',
+      body: 'The measurement above describes a different tree. Tick the box to take the command anyway.',
+    };
+  }
+  return {
+    title: 'Install is blocked until this asset has a score',
+    body: 'Nobody has run an eval gate against this asset, so there is nothing to say whether it works. Publish a gate report and it becomes installable on the next sync.',
+  };
+}
+
 export const InstallPanel = ({ asset, stale = false }: InstallPanelProps) => {
   const classes = useStyles();
   const api = useApi(skillHubApiRef);
@@ -184,8 +208,13 @@ export const InstallPanel = ({ asset, stale = false }: InstallPanelProps) => {
   const index = Math.min(selected, offered.length - 1);
   const harness = offered[index];
   const command = asset.install[harness.id]!;
-  const scored = Boolean(asset.score);
-  const installable = scored && (!stale || acknowledged);
+  // Presence of a score is not the gate; a passing verdict is. A report that
+  // says the asset failed blocks the command exactly as hard as no report at
+  // all, and says so in different words, because the two are not the same
+  // problem for whoever is reading.
+  const passed = passedGate(asset.score);
+  const failed = Boolean(asset.score) && !passed;
+  const installable = passed && (!stale || acknowledged);
 
   // A radiogroup promises one tab stop and arrow keys. Without this it
   // delivers three tab stops and dead arrows, which is worse than no role.
@@ -244,7 +273,7 @@ export const InstallPanel = ({ asset, stale = false }: InstallPanelProps) => {
         ))}
       </div>
 
-      {scored && stale && (
+      {passed && stale && (
         <div className={classes.stale}>
           <p className={classes.staleText}>
             This asset's score was measured against a different commit from the
@@ -288,16 +317,12 @@ export const InstallPanel = ({ asset, stale = false }: InstallPanelProps) => {
         ) : (
           <div className={classes.blocked}>
             <Typography className={classes.blockedTitle}>
-              {scored
-                ? 'Confirm you want a command the score does not cover'
-                : 'Install is blocked until this asset has a score'}
+              {blocked(failed, passed).title}
             </Typography>
             <Typography className={classes.body}>
-              {scored
-                ? 'The measurement above describes a different tree. Tick the box to take the command anyway.'
-                : 'Nobody has run an eval gate against this asset, so there is nothing to say whether it works. Publish a gate report and it becomes installable on the next sync.'}
+              {blocked(failed, passed).body}
             </Typography>
-            {!scored && (
+            {!passed && (
               <Box mt={1.5}>
                 <Link
                   className={classes.scoreLink}

@@ -258,6 +258,28 @@ publish:
     expect(counts).toEqual({});
   });
 
+  it('blocks install for an asset whose eval gate failed', async () => {
+    // A failed gate is a measurement that the asset does not work. Treating it
+    // as "scored, therefore installable" would make a known-bad asset easier to
+    // install than an unmeasured one.
+    const { entities } = await buildEntities({
+      repo: REPO,
+      commitSha: SHA,
+      manifest: parseManifest('owner: team\npublish:\n  packages: packages/*/apm.yml\n'),
+      ...repository({
+        'packages/broken-pack/apm.yml': 'name: broken-pack\nversion: 0.1.0\n',
+        'packages/broken-pack/eval-score.json': JSON.stringify({
+          verdict: 'FAIL',
+          recorded: '2026-09-04',
+        }),
+      }),
+    });
+
+    const pack = find(entities, 'System', 'broken-pack')!;
+    expect(readEvalScore(pack)?.verdict).toBe('FAIL');
+    expect(isInstallable(pack)).toBe(false);
+  });
+
   it('keeps the first of two globs that claim the same name, and says so', async () => {
     const { entities, collisions } = await buildEntities({
       repo: REPO,

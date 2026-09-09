@@ -1,5 +1,5 @@
 import { Tooltip, makeStyles } from '@material-ui/core';
-import { EvalScore } from '@internal/plugin-skill-hub-common';
+import { EvalScore, passedGate } from '@internal/plugin-skill-hub-common';
 
 const useStyles = makeStyles(theme => ({
   badge: {
@@ -98,7 +98,9 @@ export const ScoreBadge = ({ score, size = 'small' }: ScoreBadgeProps) => {
   }
 
   const verdict = (score.verdict ?? 'scored').toUpperCase();
-  const passed = verdict === 'PASS';
+  // One definition of a passed gate, shared with the install gate, so the
+  // badge and the button can never disagree about what the score says.
+  const passed = passedGate(score);
   const headline = topMetric(score);
 
   // The number on the badge means nothing on its own, so what it measures

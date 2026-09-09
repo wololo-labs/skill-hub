@@ -1,8 +1,11 @@
 # Scoring an asset
 
-An asset in this catalogue is installable only if it carries an eval score.
-That is the whole gate: the hub will render an unscored skill, let you read it
-and tell you where it came from, but it will not hand you a command to run.
+An asset in this catalogue is installable only if an eval gate has run against
+it and passed. That is the whole gate: the hub will render an unscored skill,
+let you read it and tell you where it came from, but it will not hand you a
+command to run. An asset whose gate failed is blocked the same way, and says so
+in different words: a report that measures the asset not working is not a reason
+to hand the command over, it is the reason not to.
 
 This page is what the disabled install button links to.
 
@@ -54,7 +57,7 @@ The fallback, for a package with no generated catalogue file.
 
 | Field | What it is |
 | --- | --- |
-| `verdict` | `PASS` or `FAIL`. Anything other than `PASS` renders as a failed gate. |
+| `verdict` | `PASS` or `FAIL`. Anything other than `PASS`, a missing verdict included, renders as a failed gate and blocks install. |
 | `recorded` | The date the gate ran. |
 | `source` | A link to the run. The asset page links straight to it. |
 | `sourceVisibility` | `internal` labels the link as needing repository access. |

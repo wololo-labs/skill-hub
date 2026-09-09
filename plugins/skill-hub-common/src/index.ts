@@ -84,9 +84,19 @@ export function readHarnesses(entity: Entity): string[] {
 }
 
 /**
- * The install gate. An asset with no score is browsable and readable but not
- * installable: the score is the gate, not decoration.
+ * Whether a score records a gate that passed. A report with no verdict has not
+ * said the asset works, so it reads the same as a failure: the surfaces treat
+ * anything other than PASS as a failed gate, and so does the install gate.
+ */
+export function passedGate(score: EvalScore | undefined): boolean {
+  return (score?.verdict ?? '').toUpperCase() === 'PASS';
+}
+
+/**
+ * The install gate. An asset is installable only when an eval gate has been run
+ * against it and passed. Unmeasured and failed are both blocked: a score that
+ * says the asset does not work is not a reason to hand over the command.
  */
 export function isInstallable(entity: Entity): boolean {
-  return readEvalScore(entity) !== undefined;
+  return passedGate(readEvalScore(entity));
 }
