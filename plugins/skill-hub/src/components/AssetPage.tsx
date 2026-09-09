@@ -134,6 +134,24 @@ const useStyles = makeStyles(theme => ({
 }));
 
 /** One labelled fact in the provenance or score table. */
+/**
+ * The score, and so its report link, comes from a scanned repository. Backstage
+ * throws on a javascript: href rather than rendering it, which would take the
+ * whole page down, and a data: URI is passed straight through. Only http and
+ * https survive; anything else loses the link rather than the page.
+ */
+function reportUrl(source: string | undefined): string | undefined {
+  if (!source) return undefined;
+  try {
+    const url = new URL(source);
+    return url.protocol === 'https:' || url.protocol === 'http:'
+      ? source
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 const Row = ({ label, value }: { label: string; value: React.ReactNode }) => {
   const classes = useStyles();
   return (
@@ -399,9 +417,9 @@ export const AssetPage = () => {
                     </Typography>
                   )}
 
-                  {score.source && (
+                  {reportUrl(score.source) && (
                     <Box mt={1.5}>
-                      <Link to={score.source}>
+                      <Link to={reportUrl(score.source)!}>
                         Eval gate report
                         {score.sourceVisibility === 'internal'
                           ? ' (internal, needs repository access)'
