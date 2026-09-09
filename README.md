@@ -148,7 +148,13 @@ own credential to read a private repository.
 - **Receipts are held in memory.** A restart loses undelivered ones. That is
   the price of never coupling a copy to a second service being up.
 - **Compose runs one Postgres with default credentials** and guest identity.
-  Local use only; both are named in `app-config.production.yaml`.
+  Local use only, and enforced rather than asked for: the port is published on
+  127.0.0.1 only, and the backend refuses to start if guest sign-in is enabled
+  while the hub calls itself anything but localhost. Guest makes every visitor a
+  signed-in user, and the asset body route reads repository contents with the
+  server's own GitHub token, so the two must never be exposed together.
+  Configure a GitHub OAuth client and drop `auth.providers.guest` to serve this
+  anywhere else.
 - **Browse filters in the browser** over the full result set, which is what
   makes the facet counts exact and the interaction instant. The list is not
   virtualised, so the ceiling is a few thousand assets; past that this moves

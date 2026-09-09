@@ -9,6 +9,7 @@
 
 import { createBackend } from '@backstage/backend-defaults';
 import skillHubPlugin, {
+  authModuleGuestGuard,
   catalogModuleSkillHub,
 } from '@internal/plugin-skill-hub-backend';
 
@@ -21,6 +22,9 @@ backend.add(import('@backstage/plugin-proxy-backend'));
 // app; the GitHub provider takes over as soon as a client id is configured.
 backend.add(import('@backstage/plugin-auth-backend'));
 backend.add(import('@backstage/plugin-auth-backend-module-guest-provider'));
+// Guest is only tolerable while the hub is on localhost, so that is enforced
+// rather than documented: see guestGuard.ts.
+backend.add(authModuleGuestGuard);
 backend.add(import('@backstage/plugin-auth-backend-module-github-provider'));
 
 // catalog plugin

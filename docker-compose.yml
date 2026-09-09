@@ -21,7 +21,11 @@ services:
     build:
       context: .
     ports:
-      - '7007:7007'
+      # Loopback only. The hub trusts guest sign-in, and guest sign-in trusts
+      # whoever can open the page, so nothing outside this machine should be
+      # able to reach it. Publishing on 0.0.0.0 here is what the guest guard in
+      # the backend refuses to start alongside.
+      - '127.0.0.1:7007:7007'
     environment:
       APP_BASE_URL: ${APP_BASE_URL:-http://localhost:7007}
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
