@@ -22,6 +22,11 @@ spec:
 apiVersion: backstage.io/v1alpha1
 kind: User
 metadata:
+  # The guest provider resolves sign-in to user:development/guest, so the entity
+  # has to live in that namespace. Without it the backend asks the catalogue for
+  # a user that is not there on every request, which answers 404 and fills the
+  # log with noise that reads like a fault.
   name: guest
+  namespace: development
 spec:
-  memberOf: [team-ai-platform]
+  memberOf: [default/team-ai-platform]
