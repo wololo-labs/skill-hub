@@ -306,7 +306,14 @@ export const AssetPage = () => {
           </InfoCard>
 
           <div className={classes.side}>
-            <InstallPanel asset={asset} stale={Boolean(stale)} />
+            <InstallPanel
+              // Keyed to the asset: the router reuses this element between two
+              // asset pages, and without a key an acknowledged stale gate, the
+              // chosen harness and the copy receipt all travel to the next one.
+              key={asset.entityRef}
+              asset={asset}
+              stale={Boolean(stale)}
+            />
 
             <InfoCard title="Provenance">
               <Table size="small">
