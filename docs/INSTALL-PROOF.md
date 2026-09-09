@@ -150,3 +150,41 @@ wires the MCP server into `.codex/config.toml` and deploys no skills, agents or
 instructions, because those primitives have no Codex mapping yet. The command
 the panel offers is the right command and it succeeds; it simply delivers less
 than the other two targets do. Nothing in the hub asserts otherwise.
+
+## Re-run on 2026-09-08
+
+The same command, into a clean `HOME` with no prior agent configuration:
+
+```console
+$ apm install 'stevengonsalvez/ainb-toolkit/packages/qe-agent-pack#937cc70d4a371e4189e891a113fe5374eaefaaa9' --target claude
+  |-- 4 agents integrated -> .claude/agents/
+  |-- 3 rule(s) integrated -> .claude/rules/
+  |-- 4 skill(s) integrated -> .claude/skills/
+[*] Installed 1 APM dependency and 1 MCP server in 2.7s.
+```
+
+The browser side, driven end to end against the container on 7007: search for
+the asset, open it, pick a harness, copy, then read the clipboard back.
+
+```
+gate before:   BLOCKED
+copy button before acknowledging: 0
+COMMAND SHOWN: apm install 'stevengonsalvez/ainb-toolkit/packages/qe-agent-pack#937cc70d4a371e4189e891a113fe5374eaefaaa9' --target codex
+CLIPBOARD    : apm install 'stevengonsalvez/ainb-toolkit/packages/qe-agent-pack#937cc70d4a371e4189e891a113fe5374eaefaaa9' --target codex
+match: true
+receipt: Copy recorded: qe-agent-pack for Codex.
+```
+
+The gate in front of the copy button is not the unscored one. This asset is
+scored, and its score was measured at `422e8f6d`, which is not the commit the
+manifest pins. The panel refuses the command until that mismatch is
+acknowledged, which is the state the asset is genuinely in today.
+
+The unscored case, on the same run:
+
+```
+copy buttons: 0
+reason:      Install is blocked until this asset has a score
+explanation: Nobody has run an eval gate against this asset, so there is
+             nothing to say whether it works.
+```

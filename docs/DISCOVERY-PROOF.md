@@ -179,3 +179,40 @@ The failure was also disguised. The container served `200` on `/` from its
 static assets while the backend was shutting down behind them, and an earlier
 version of this check reported a healthy hub that was in fact the development
 server still holding port 7007.
+
+## Re-run on 2026-09-08, both directions again
+
+The same loop, run again two days later against the same live hub, to check
+that the behaviour above is the system's and not that afternoon's. The
+timestamps are the polling script's, one minute apart, against the catalogue
+API rather than the log.
+
+```
+manifest DELETED     13:56:26Z
+UNPUBLISHED          14:06:35Z   fixture entities in the catalogue: 0
+manifest RESTORED    14:06:36Z
+REPUBLISHED          14:16:38Z   fixture entities in the catalogue: 3
+```
+
+Ten minutes each way, which is the configured sync interval. The provider's
+own log for the same window:
+
+```
+agent asset sync finished: 130 entities from 2 of 389 repositories in 16261ms
+agent asset sync finished: 127 entities from 1 of 389 repositories in 16123ms
+agent asset sync finished: 130 entities from 2 of 389 repositories in 13100ms
+```
+
+Two repositories in the estate answer with an access error on every run:
+
+```
+skipping stevengonsalvez/appdocs: Repository access blocked
+skipping stevengonsalvez/bypass-paywalls-chrome: Repository access blocked
+```
+
+That is the graceful skip working, and re-reading it here is what surfaced a
+defect the proof itself had been hiding: those repositories publish nothing, so
+nothing was visibly lost, but a repository that did publish would have had its
+assets deleted on every failed read and restored on the next good one. The
+provider now carries a repository forward when it cannot be read, and refuses
+to apply an empty authoritative mutation that arrives alongside an error.
