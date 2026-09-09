@@ -82,7 +82,8 @@ export interface BodyRequest {
  *   1. the repository must be one the provider actually published, which means
  *      it opted in by committing .agent-assets.yaml
  *   2. the commit must look like the full sha the provider pins to
- *   3. the file must live under the asset's own path
+ *   3. the path must not contain a .. segment
+ *   4. the file must live under the asset's own path
  *
  * Returns the reason for a refusal, or undefined to allow the read.
  */
@@ -100,6 +101,12 @@ export function refuseUnlessPublished(
     return 'the commit is not a full sha';
   }
   const { assetPath, path } = request;
+  // A prefix test alone is not containment: skills/commit/../../.env starts
+  // with skills/commit/ and still walks out of the asset, and the token this
+  // route reads with can see private repositories.
+  if (path.split('/').includes('..')) {
+    return 'the path walks out of the asset it belongs to';
+  }
   if (
     assetPath === undefined ||
     !(path === assetPath || path.startsWith(`${assetPath}/`))

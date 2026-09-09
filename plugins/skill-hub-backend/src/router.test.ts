@@ -92,6 +92,20 @@ describe('refuseUnlessPublished', () => {
     }
   });
 
+  it('refuses a path that walks out of the asset', () => {
+    // A prefix test alone would accept every one of these: they all start with
+    // the asset path and every one of them reads a different file.
+    for (const path of [
+      'skills/commit/../../.env',
+      'skills/commit/../../../etc/passwd',
+      'skills/commit/..',
+    ]) {
+      expect(refuseUnlessPublished({ ...good, path }, published)).toMatch(
+        /walks out of the asset/,
+      );
+    }
+  });
+
   it('refuses an entity carrying no asset path at all', () => {
     expect(
       refuseUnlessPublished({ ...good, assetPath: undefined }, published),
