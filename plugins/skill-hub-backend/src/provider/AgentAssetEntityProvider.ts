@@ -56,6 +56,11 @@ export interface AgentAssetEntityProviderOptions {
 export class AgentAssetEntityProvider implements EntityProvider {
   readonly #options: AgentAssetEntityProviderOptions;
   #connection?: EntityProviderConnection;
+  // The last run that actually saw each repository, keyed by full name. The
+  // mutation below is authoritative, so a repository that cannot be read this
+  // time has to be carried forward: without this, one 403 unpublishes
+  // everything that repository owns until the next run that succeeds.
+  readonly #lastSeen = new Map<string, Entity[]>();
 
   constructor(options: AgentAssetEntityProviderOptions) {
     this.#options = options;
@@ -112,6 +117,17 @@ export class AgentAssetEntityProvider implements EntityProvider {
           state: 'error',
           error: `could not list repositories: ${(error as Error).message}`,
         });
+        for (const [name, cached] of this.#lastSeen) {
+          if (name.startsWith(`${owner}/`) && cached.length) {
+            entities.push(...cached);
+            repositories.push({
+              repository: name,
+              state: 'published',
+              entityCount: cached.length,
+              error: 'carried forward: the owner could not be listed this run',
+            });
+          }
+        }
         continue;
       }
 
@@ -197,9 +213,49 @@ export class AgentAssetEntityProvider implements EntityProvider {
 
       for (const result of results) {
         if (!result) continue;
-        entities.push(...result.entities);
+        const name = result.status.repository;
+        if (result.status.state === 'published') {
+          this.#lastSeen.set(name, result.entities);
+          entities.push(...result.entities);
+          repositories.push(result.status);
+          continue;
+        }
+        // The repository answered with an error rather than an empty manifest,
+        // so this run has no opinion about what it publishes. Removing its
+        // assets would read as an unpublish, which is a different event.
+        const cached = this.#lastSeen.get(name);
+        if (cached?.length) {
+          entities.push(...cached);
+          logger.warn(
+            `${name} could not be read, carrying forward the ${cached.length} entities from the last run that could`,
+          );
+        }
         repositories.push(result.status);
       }
+    }
+
+    // The mutation below is authoritative: whatever it omits is deleted. A run
+    // that could not see the estate must therefore not be applied, or one
+    // expired token turns an outage into an empty catalogue that takes a full
+    // sync to come back.
+    const previous = status.get();
+    // An empty estate is a legitimate state: every repository can remove its
+    // manifest. An empty estate that arrives alongside errors is not, so the
+    // two are told apart by whether anything actually failed this run.
+    const anyFailed = repositories.some(r => r.state === 'error');
+    if (entities.length === 0 && previous.entityCount > 0 && anyFailed) {
+      const reason =
+        'this run found no assets where the last one found some, and something failed while scanning, so it is treated as a failure rather than a removal';
+      logger.error(`leaving the catalogue as it is: ${reason}`);
+      const failedAt = Date.now();
+      status.set({
+        ...previous,
+        lastRunStartedAt: new Date(startedAt).toISOString(),
+        lastRunFinishedAt: new Date(failedAt).toISOString(),
+        lastRunDurationMs: failedAt - startedAt,
+        lastRunError: reason,
+      });
+      return;
     }
 
     await this.#connection.applyMutation({

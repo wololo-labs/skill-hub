@@ -196,6 +196,79 @@ describe('AgentAssetEntityProvider', () => {
     ).toMatch(/could not list repositories/);
   });
 
+  it('carries a repository forward when it cannot be read, rather than unpublishing it', async () => {
+    // Access blocked, rate limited, a 5xx: none of these are the repository
+    // saying it no longer publishes anything, and the mutation is
+    // authoritative, so treating them as removals would empty the catalogue
+    // one outage at a time.
+    const estate: Record<string, Record<string, FakeRepo>> = {
+      'wololo-labs': {
+        healthy: {
+          manifest: SKILL_MANIFEST,
+          files: { 'skills/four/SKILL.md': '---\ndescription: four\n---\n' },
+        },
+      },
+    };
+    const status = fakeStatus();
+    const { connection, mutations } = fakeConnection();
+    const provider = new AgentAssetEntityProvider({
+      owners: ['wololo-labs'],
+      reader: fakeReader(estate),
+      logger: mockServices.logger.mock(),
+      scheduler,
+      status,
+    });
+    await provider.connect(connection);
+    await provider.refresh();
+    expect(mutations[0]).toHaveLength(1);
+
+    estate['wololo-labs'].healthy.broken = true;
+    await provider.refresh();
+
+    expect(mutations[1]).toHaveLength(1);
+    expect(
+      status.latest().repositories.find(r => r.repository === 'wololo-labs/healthy')
+        ?.state,
+    ).toBe('error');
+  });
+
+  it('leaves the catalogue alone when a run finds nothing and something failed', async () => {
+    // Everything the last run published is gone from this one, but a
+    // repository also errored, so the run cannot tell an unpublish apart from
+    // a failure. It declines to guess, and the catalogue keeps what it has.
+    const estate: Record<string, Record<string, FakeRepo>> = {
+      'wololo-labs': {
+        healthy: {
+          manifest: SKILL_MANIFEST,
+          files: { 'skills/four/SKILL.md': '---\ndescription: four\n---\n' },
+        },
+        quiet: {},
+      },
+    };
+    const status = fakeStatus();
+    const { connection, mutations } = fakeConnection();
+    const provider = new AgentAssetEntityProvider({
+      owners: ['wololo-labs'],
+      reader: fakeReader(estate),
+      logger: mockServices.logger.mock(),
+      scheduler,
+      status,
+    });
+    await provider.connect(connection);
+    await provider.refresh();
+    expect(mutations).toHaveLength(1);
+
+    // The one publisher removes its manifest, and a repository that never
+    // published anything starts failing in the same run.
+    delete estate['wololo-labs'].healthy.manifest;
+    estate['wololo-labs'].quiet.broken = true;
+    await provider.refresh();
+
+    expect(mutations).toHaveLength(1);
+    expect(status.latest().lastRunError).toMatch(/treated as a failure/);
+    expect(status.latest().entityCount).toBe(1);
+  });
+
   it('unpublishes a repository that removes its manifest', async () => {
     const estate: Record<string, Record<string, FakeRepo>> = {
       'wololo-labs': {
