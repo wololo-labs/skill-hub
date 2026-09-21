@@ -186,6 +186,90 @@ publish:
     expect(mcp.spec?.system).toBe('qe-agent-pack');
   });
 
+  it('takes the score from the gate report, ahead of anything transcribed by hand', async () => {
+    const measuredAt = 'c'.repeat(40);
+    const gateReport = JSON.stringify({
+      schema_version: '1.0.0',
+      verdict: 'pass',
+      reason: '',
+      recorded: '2026-09-04',
+      source: 'https://github.com/wololo-labs/wololo-evals/actions/runs/1',
+      sourceVisibility: 'internal',
+      subject: {
+        repo: 'wololo-labs/estate',
+        path: 'packages/qe-agent-pack',
+        commit: measuredAt,
+      },
+      signals: [
+        {
+          evaluator_id: 'qe_review',
+          candidate_mean: 0.8,
+          baseline_mean: 0.8,
+          guarded: false,
+        },
+        {
+          evaluator_id: 'mutation_kill_rate',
+          candidate_mean: 0.3012,
+          baseline_mean: 0.2373,
+          guarded: true,
+        },
+      ],
+    });
+
+    const { entities } = await buildEntities({
+      repo: REPO,
+      commitSha: SHA,
+      manifest: parseManifest(
+        'owner: team\npublish:\n  packages: packages/*/apm.yml\n',
+      ),
+      ...repository({
+        'packages/qe-agent-pack/apm.yml': 'name: qe-agent-pack\n',
+        'packages/qe-agent-pack/eval-gate-report.json': gateReport,
+        'packages/qe-agent-pack/eval-score.json': '{"verdict":"IGNORED"}',
+      }),
+    });
+
+    const score = readEvalScore(entities[0])!;
+    expect(score.verdict).toBe('PASS');
+    expect(isInstallable(entities[0])).toBe(true);
+    expect(score.recorded).toBe('2026-09-04');
+    expect(score.measuredCommit).toBe(measuredAt);
+    // The guarded signal is the headline, because it is the one the gate
+    // would have failed on.
+    expect(Object.keys(score.metrics!)).toEqual([
+      'mutation_kill_rate',
+      'qe_review',
+    ]);
+    expect(score.metrics!.mutation_kill_rate).toEqual({
+      candidate: 0.3012,
+      baseline: 0.2373,
+    });
+  });
+
+  it('keeps the install blocked when the gate did not pass', async () => {
+    const report = (verdict: string) =>
+      JSON.stringify({ verdict, signals: [], subject: { commit: 'd'.repeat(40) } });
+
+    for (const verdict of ['regression', 'refused']) {
+      const { entities } = await buildEntities({
+        repo: REPO,
+        commitSha: SHA,
+        manifest: parseManifest(
+          'owner: team\npublish:\n  packages: packages/*/apm.yml\n',
+        ),
+        ...repository({
+          'packages/qe-agent-pack/apm.yml': 'name: qe-agent-pack\n',
+          'packages/qe-agent-pack/eval-gate-report.json': report(verdict),
+          // A hand-written PASS beside a failed gate changes nothing.
+          'packages/qe-agent-pack/eval-score.json': '{"verdict":"PASS"}',
+        }),
+      });
+
+      expect(readEvalScore(entities[0])?.verdict).toBe(verdict.toUpperCase());
+      expect(isInstallable(entities[0])).toBe(false);
+    }
+  });
+
   it('prefers the publisher catalogue for the score, and keeps the commit it was measured at', async () => {
     const measuredAt = 'b'.repeat(40);
     const catalogInfo = [
