@@ -123,17 +123,92 @@ function installCommands(
 }
 
 /**
+ * The gate's own report, as `wololo-evals-cli gate -o` wrote it.
+ *
+ * Nothing here is restated by hand: the verdict is the gate's verdict, every
+ * metric is a signal's two means, and the commit is the commit the gate says
+ * it measured. A number in the hub therefore cannot drift from the run that
+ * produced it without the report itself being edited.
+ *
+ * A report that names no commit still scores the asset. It just cannot show
+ * staleness, which is the publisher's omission to fix and not a reason to
+ * drop the score.
+ */
+function readGateReport(reportJson: string): EvalScore | undefined {
+  let report: {
+    verdict?: unknown;
+    recorded?: unknown;
+    source?: unknown;
+    sourceVisibility?: unknown;
+    subject?: { commit?: unknown } | null;
+    signals?: unknown;
+  };
+  try {
+    report = JSON.parse(reportJson);
+  } catch {
+    return undefined;
+  }
+  if (typeof report !== 'object' || report === null) return undefined;
+  if (typeof report.verdict !== 'string') return undefined;
+
+  const signals = Array.isArray(report.signals) ? report.signals : [];
+  const scored = signals.filter(
+    (s): s is { evaluator_id: string; candidate_mean: number; baseline_mean: number; guarded?: boolean } =>
+      typeof s === 'object' &&
+      s !== null &&
+      typeof (s as any).evaluator_id === 'string' &&
+      typeof (s as any).candidate_mean === 'number' &&
+      typeof (s as any).baseline_mean === 'number',
+  );
+  // The signals the gate was told to guard come first, so the headline metric
+  // on the badge is one the gate would have failed on rather than whichever
+  // evaluator happened to be emitted first.
+  const ordered = [
+    ...scored.filter(s => s.guarded),
+    ...scored.filter(s => !s.guarded),
+  ];
+  const metrics = Object.fromEntries(
+    ordered.map(s => [
+      s.evaluator_id,
+      { candidate: s.candidate_mean, baseline: s.baseline_mean },
+    ]),
+  );
+
+  const text = (value: unknown) =>
+    typeof value === 'string' && value ? value : undefined;
+  const commit = text(report.subject?.commit);
+
+  return {
+    // `pass` is the only verdict that opens the install gate, and every other
+    // one the gate can return (`regression`, `refused`) is carried through as
+    // itself rather than flattened to a failure it might not be.
+    verdict: report.verdict.toUpperCase(),
+    recorded: text(report.recorded),
+    source: text(report.source),
+    sourceVisibility: text(report.sourceVisibility),
+    ...(Object.keys(metrics).length ? { metrics } : {}),
+    ...(commit && /^[0-9a-f]{7,40}$/.test(commit)
+      ? { measuredCommit: commit }
+      : {}),
+  };
+}
+
+/**
  * Reads the score a publisher has already recorded.
  *
- * A generated `catalog-info.yaml` next to `apm.yml` is preferred, because it
- * is the publisher-side contract: it carries the score annotation and pins the
- * commit the pack was generated and scored at, which is what makes staleness
- * visible. A bare `eval-score.json` is the fallback.
+ * The gate's own report is preferred over everything else, because it is the
+ * only form the publisher did not have to transcribe. A generated
+ * `catalog-info.yaml` comes next, then a bare `eval-score.json`.
  */
 function readPackageScore(
+  gateReport: string | undefined,
   catalogInfo: string | undefined,
   evalScoreJson: string | undefined,
 ): EvalScore | undefined {
+  if (gateReport) {
+    const score = readGateReport(gateReport);
+    if (score) return score;
+  }
   if (catalogInfo) {
     try {
       for (const doc of parseAllDocuments(catalogInfo)) {
@@ -181,6 +256,7 @@ export function publishedPaths(
   const sidecars = matched
     .filter(path => matches(path, manifest.publish.packages ?? []))
     .flatMap(path => [
+      `${dirname(path)}/eval-gate-report.json`,
       `${dirname(path)}/catalog-info.yaml`,
       `${dirname(path)}/eval-score.json`,
       `${dirname(path)}/README.md`,
@@ -246,6 +322,9 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
     }
     const name = typeof apm.name === 'string' ? apm.name : stem(dir || path);
     const score = readPackageScore(
+      paths.has(`${dir}/eval-gate-report.json`)
+        ? await read(`${dir}/eval-gate-report.json`)
+        : undefined,
       paths.has(`${dir}/catalog-info.yaml`)
         ? await read(`${dir}/catalog-info.yaml`)
         : undefined,

@@ -1,0 +1,49 @@
+name: CI
+
+# What a reviewer would otherwise have to take on trust: the repository
+# typechecks, lints and passes its own tests. The hub refuses to hand over an
+# install command for an asset nobody measured, so it should not merge a change
+# nobody ran.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Typecheck, lint and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable the pinned Yarn
+        run: corepack enable
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Typecheck
+        run: yarn tsc
+
+      # The whole repository rather than the diff: `yarn lint` is scoped to
+      # what changed since origin/main, which lints nothing at all on a push to
+      # main itself.
+      - name: Lint
+        run: yarn lint:all
+
+      - name: Test
+        run: yarn test

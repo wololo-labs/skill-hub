@@ -23,23 +23,68 @@ the install gesture is offered at all.
 ## What the hub reads
 
 The hub does not compute scores. It reads what a publisher has already
-recorded, in one of two places, checked in this order.
+recorded, in one of three places, checked in this order.
 
-### 1. A generated `catalog-info.yaml` beside `apm.yml`
+### 1. The gate's own report, `eval-gate-report.json` beside `apm.yml`
 
-This is the preferred form, because it is the publisher-side contract: the same
-entity shape the hub emits, generated from the package rather than written by
-hand. The hub reads the `wololo.dev/eval-score` annotation from the `System`
-document, and takes the commit out of its `backstage.io/source-location` as the
-commit the score was measured at.
+The preferred form, because it is the only one nobody has to transcribe. It is
+the file `wololo-evals-cli gate -o` wrote, committed unchanged. The hub takes
+the verdict from the report's verdict, each metric from a signal's two means,
+and the commit from `subject.commit`, so a number in the catalogue cannot drift
+from the run that produced it without the report itself being edited.
 
-That second part is what makes staleness visible. The asset page shows the
-commit the asset is pinned to and the commit the score was measured at side by
-side, and says so plainly when they differ.
+```json
+{
+  "schema_version": "1.0.0",
+  "verdict": "pass",
+  "recorded": "2026-09-04",
+  "source": "https://github.com/wololo-labs/wololo-evals/actions/runs/33898453721",
+  "sourceVisibility": "internal",
+  "subject": {
+    "repo": "wololo-labs/estate",
+    "path": "packages/qe-agent-pack",
+    "commit": "422e8f6d59ee1677c81f291ac05e54efec309c02"
+  },
+  "signals": [
+    {
+      "evaluator_id": "mutation_kill_rate",
+      "candidate_mean": 0.3012,
+      "baseline_mean": 0.2373,
+      "guarded": true
+    }
+  ]
+}
+```
 
-### 2. An `eval-score.json` beside `apm.yml`
+| Field | What it is |
+| --- | --- |
+| `verdict` | The gate's verdict. Only `pass` opens the install gesture; `regression` and `refused` block it and are shown as themselves. |
+| `recorded` | The date the gate ran. |
+| `source` | A link to the run. The asset page links straight to it. |
+| `sourceVisibility` | `internal` labels the link as needing repository access. |
+| `subject.commit` | The commit of the asset the gate measured. Omit it and the score still counts, but staleness cannot be shown. |
+| `signals` | Every evaluator the gate scored, as a candidate mean against a baseline mean. Guarded signals are read first, so the headline on the badge is a signal the gate would have failed on. |
 
-The fallback, for a package with no generated catalogue file.
+Everything else the gate writes, the reason, the statistics, the quarantined
+cases, is carried in the file and ignored by the hub.
+
+### 2. A generated `catalog-info.yaml` beside `apm.yml`
+
+The publisher-side contract: the same entity shape the hub emits, generated
+from the package rather than written by hand. The hub reads the
+`wololo.dev/eval-score` annotation from the `System` document, and takes the
+commit out of its `backstage.io/source-location` as the commit the score was
+measured at.
+
+Staleness is shown the same way whichever form a score arrives in. The asset
+page puts the commit the asset is pinned to and the commit the score was
+measured at side by side, and says so plainly when they differ.
+
+### 3. An `eval-score.json` beside `apm.yml`
+
+The last fallback, for a package with neither a gate report nor a generated
+catalogue file. Every number in it is a transcription, which is why it sits
+below both.
 
 ```json
 {
@@ -86,8 +131,9 @@ servers it depends on, which is not what anybody installs.
    [wololo-evals](https://github.com/wololo-labs/wololo-evals). Every number
    is recomputed at gate time against the fixture; recorded trajectories are
    not accepted as evidence.
-3. Commit the gate output as `eval-score.json` beside `apm.yml`, or regenerate
-   the package's `catalog-info.yaml`.
+3. Commit the gate's `-o` output unchanged as `eval-gate-report.json` beside
+   `apm.yml`. Editing it to tidy the numbers is the one thing that breaks the
+   chain back to the run.
 4. Wait one sync. The badge changes and the install button becomes live, with
    no change to this application.
 
