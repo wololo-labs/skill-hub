@@ -12,7 +12,9 @@ import {
   ANNOTATION_INSTALL,
   ANNOTATION_REPO,
   ANNOTATION_SOURCE_LOCATION,
+  APM_ALL_TARGETS,
   EvalScore,
+  HARNESSES,
   InstallCommands,
 } from '@internal/plugin-skill-hub-common';
 import { RepoRef, TreeEntry } from '../github/GithubAssetReader';
@@ -47,6 +49,8 @@ interface PackageInfo {
   name: string;
   version?: string;
   score?: EvalScore;
+  /** The harnesses APM will actually deploy this package to. */
+  harnesses: string[];
   mcp: Array<Record<string, unknown>>;
 }
 
@@ -243,6 +247,35 @@ function readPackageScore(
 }
 
 /**
+ * The harnesses a package can be installed for.
+ *
+ * APM treats a package's own `targets:` as a restriction, not a default:
+ * `apm install --target codex` on a pack that declares `[claude, copilot]`
+ * skips every primitive in it, exits 0 and still reports the dependency
+ * installed. Offering a target the pack excludes would hand over a command
+ * that succeeds and delivers nothing, so the declared targets decide what is
+ * offered. A pack that declares none falls back to what the repository's
+ * manifest names, and a declaration naming only slugs APM does not know
+ * offers nothing rather than guessing.
+ */
+function packageHarnesses(
+  apm: Record<string, unknown>,
+  fallback: string[],
+): string[] {
+  const raw = apm.targets ?? apm.target;
+  const declared = (Array.isArray(raw) ? raw : [raw]).filter(
+    (t): t is string => typeof t === 'string',
+  );
+  if (!declared.length) return fallback;
+
+  const known = new Set<string>(HARNESSES.map(h => h.id));
+  const wanted = declared.flatMap(t => (t === 'all' ? APM_ALL_TARGETS : [t]));
+  return HARNESSES.map(h => h.id).filter(
+    id => wanted.includes(id) && known.has(id),
+  );
+}
+
+/**
  * Every path the manifest asks for, plus the sidecars a package needs. The
  * provider uses this to warm the blob cache concurrently, so building the
  * entities is not several hundred sequential round trips.
@@ -293,7 +326,12 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
     },
   };
 
-  const base = (path: string, kind: 'blob' | 'tree', bodyPath?: string) => ({
+  const base = (
+    path: string,
+    kind: 'blob' | 'tree',
+    bodyPath?: string,
+    harnesses: string[] = manifest.harnesses,
+  ) => ({
     [ANNOTATION_SOURCE_LOCATION]: `url:${sourceUrl(repo, commitSha, path, kind)}`,
     'backstage.io/managed-by-location': `url:${sourceUrl(repo, commitSha, '.agent-assets.yaml', 'blob')}`,
     'backstage.io/managed-by-origin-location': `url:${sourceUrl(repo, commitSha, '.agent-assets.yaml', 'blob')}`,
@@ -301,7 +339,7 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
     [ANNOTATION_COMMIT]: commitSha,
     [ANNOTATION_ASSET_PATH]: path,
     ...(bodyPath ? { [ANNOTATION_BODY_PATH]: bodyPath } : {}),
-    [ANNOTATION_HARNESSES]: manifest.harnesses.join(','),
+    [ANNOTATION_HARNESSES]: harnesses.join(','),
   });
 
   const sourceLink = (path: string, kind: 'blob' | 'tree') => [
@@ -345,6 +383,7 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
       name: entityName(name),
       version: typeof apm.version === 'string' ? apm.version : undefined,
       score,
+      harnesses: packageHarnesses(apm, manifest.harnesses),
       mcp,
     };
     packages.push(info);
@@ -365,13 +404,18 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
           typeof apm.description === 'string' ? apm.description : undefined,
         tags,
         annotations: {
-          ...base(dir, 'tree', paths.has(`${dir}/README.md`) ? `${dir}/README.md` : path),
+          ...base(
+            dir,
+            'tree',
+            paths.has(`${dir}/README.md`) ? `${dir}/README.md` : path,
+            info.harnesses,
+          ),
           ...(info.version
             ? { [ANNOTATION_APM_PACKAGE]: `${name}@${info.version}` }
             : {}),
           ...(score ? { [ANNOTATION_EVAL_SCORE]: JSON.stringify(score) } : {}),
           [ANNOTATION_INSTALL]: JSON.stringify(
-            installCommands(repo, commitSha, manifest.harnesses, {
+            installCommands(repo, commitSha, info.harnesses, {
               kind: 'package',
               dir,
             }),
@@ -400,13 +444,13 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
           } transport).`,
           tags,
           annotations: {
-            ...base(path, 'blob', path),
+            ...base(path, 'blob', path, info.harnesses),
             ...(score
               ? { [ANNOTATION_EVAL_SCORE]: JSON.stringify(score) }
               : {}),
             [ANNOTATION_EVAL_SCORE_REF]: `system:${namespace}/${info.name}`,
             [ANNOTATION_INSTALL]: JSON.stringify(
-              installCommands(repo, commitSha, manifest.harnesses, {
+              installCommands(repo, commitSha, info.harnesses, {
                 kind: 'package',
                 dir,
               }),
@@ -466,6 +510,7 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
       continue;
     }
     const pkg = owningPackage(path);
+    const harnesses = pkg?.harnesses ?? manifest.harnesses;
     const name = typeof server.name === 'string' ? server.name : stem(path);
     entities.push({
       apiVersion: 'backstage.io/v1alpha1',
@@ -479,13 +524,13 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
             ? server.description
             : `MCP server declared in ${path}.`,
         annotations: {
-          ...base(path, 'blob', path),
+          ...base(path, 'blob', path, harnesses),
           ...scoreAnnotations(pkg, namespace),
           [ANNOTATION_INSTALL]: JSON.stringify(
             installCommands(
               repo,
               commitSha,
-              manifest.harnesses,
+              harnesses,
               pkg
                 ? { kind: 'package', dir: pkg.dir }
                 : { kind: 'unit', path },
@@ -529,6 +574,7 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
         : stem(path).replace(/\.(agent|instructions|prompt|eval)$/, '');
       const name = entityName(described.name ?? fallbackName);
       const pkg = owningPackage(path);
+      const harnesses = pkg?.harnesses ?? manifest.harnesses;
 
       entities.push({
         apiVersion: 'backstage.io/v1alpha1',
@@ -540,13 +586,13 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
           description: described.description,
           tags: described.tags,
           annotations: {
-            ...base(assetPath, isDirectoryAsset ? 'tree' : 'blob', path),
+            ...base(assetPath, isDirectoryAsset ? 'tree' : 'blob', path, harnesses),
             ...scoreAnnotations(pkg, namespace),
             [ANNOTATION_INSTALL]: JSON.stringify(
               installCommands(
                 repo,
                 commitSha,
-                manifest.harnesses,
+                harnesses,
                 pkg
                   ? { kind: 'package', dir: pkg.dir }
                   : { kind: 'unit', path: assetPath },
@@ -560,7 +606,7 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
           lifecycle: 'experimental',
           owner,
           ...systemOf(pkg),
-          agents: manifest.harnesses,
+          agents: harnesses,
         },
       });
       counts[kind] = (counts[kind] ?? 0) + 1;

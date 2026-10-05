@@ -199,7 +199,8 @@ export const InstallPanel = ({ asset, stale = false }: InstallPanelProps) => {
       <InfoCard title="Install">
         <Typography className={classes.body}>
           This asset publishes no install command. That happens when its path
-          contains characters that would not survive being pasted into a shell.
+          contains characters that would not survive being pasted into a shell,
+          or when its pack declares no target that APM recognises.
         </Typography>
       </InfoCard>
     );

@@ -17,12 +17,42 @@ export const ANNOTATION_ASSET_PATH = 'wololo.dev/asset-path';
 export const ANNOTATION_BODY_PATH = 'wololo.dev/body-path';
 export const ANNOTATION_APM_PACKAGE = 'wololo.dev/apm-package';
 
-/** Harness slugs the install panel offers, in display order. */
+/**
+ * Harness slugs the install panel can name, in display order. These are APM's
+ * canonical `--target` slugs, so any slug a package declares in its own
+ * `targets:` has a label here. The first three are the ones a repository
+ * manifest may name for standalone assets, which install through ainb.
+ */
 export const HARNESSES = [
   { id: 'claude', label: 'Claude Code' },
   { id: 'copilot', label: 'GitHub Copilot' },
   { id: 'codex', label: 'Codex' },
+  { id: 'cursor', label: 'Cursor' },
+  { id: 'gemini', label: 'Gemini CLI' },
+  { id: 'opencode', label: 'OpenCode' },
+  { id: 'windsurf', label: 'Windsurf' },
+  { id: 'kiro', label: 'Kiro' },
+  { id: 'grok-build', label: 'Grok Build' },
+  { id: 'antigravity', label: 'Antigravity' },
+  { id: 'hermes', label: 'Hermes' },
+  { id: 'agent-skills', label: 'Agent Skills' },
 ] as const;
+
+/**
+ * What `targets: all` means to APM: every target it auto-detects. The last
+ * three above are explicit-only and are not part of it.
+ */
+export const APM_ALL_TARGETS: readonly string[] = [
+  'copilot',
+  'claude',
+  'grok-build',
+  'cursor',
+  'opencode',
+  'codex',
+  'gemini',
+  'windsurf',
+  'kiro',
+];
 
 export type HarnessId = (typeof HARNESSES)[number]['id'];
 

@@ -5,6 +5,7 @@ import {
   ANNOTATION_EVAL_SCORE_REF,
   ANNOTATION_SOURCE_LOCATION,
   readEvalScore,
+  readHarnesses,
   readInstallCommands,
   isInstallable,
 } from '@internal/plugin-skill-hub-common';
@@ -268,6 +269,70 @@ publish:
       expect(readEvalScore(entities[0])?.verdict).toBe(verdict.toUpperCase());
       expect(isInstallable(entities[0])).toBe(false);
     }
+  });
+
+  describe('which harnesses a pack is offered for', () => {
+    const pack = async (apmYaml: string) => {
+      const { entities } = await buildEntities({
+        repo: REPO,
+        commitSha: SHA,
+        manifest: parseManifest(
+          'owner: team\npublish:\n  packages: packages/*/apm.yml\n  skills: packages/*/.apm/skills/*/SKILL.md\n',
+        ),
+        ...repository({
+          'packages/p/apm.yml': apmYaml,
+          'packages/p/.apm/skills/s/SKILL.md': '---\ndescription: a skill\n---\n',
+        }),
+      });
+      return {
+        system: find(entities, 'System', 'p')!,
+        skill: find(entities, 'AiResource', 's')!,
+      };
+    };
+
+    it('offers only the targets the pack declares, because APM skips the rest', async () => {
+      // `apm install --target codex` on this pack exits 0 and deploys none of
+      // it, so a codex command here would succeed and deliver nothing.
+      const { system, skill } = await pack(
+        'name: p\ntargets:\n  - copilot\n  - claude\n',
+      );
+
+      expect(readHarnesses(system)).toEqual(['claude', 'copilot']);
+      expect(Object.keys(readInstallCommands(system)).sort()).toEqual([
+        'claude',
+        'copilot',
+      ]);
+      // A member installs as the pack, so it is offered what the pack is.
+      expect(readHarnesses(skill)).toEqual(['claude', 'copilot']);
+      expect(readInstallCommands(skill).codex).toBeUndefined();
+    });
+
+    it('falls back to the repository manifest when the pack declares nothing', async () => {
+      const { system } = await pack('name: p\n');
+      expect(readHarnesses(system)).toEqual(['claude', 'copilot', 'codex']);
+    });
+
+    it('reads the singular target key and APM slugs beyond the original three', async () => {
+      const { system } = await pack('name: p\ntarget: cursor\n');
+      expect(readHarnesses(system)).toEqual(['cursor']);
+      expect(readInstallCommands(system).cursor).toContain('--target cursor');
+    });
+
+    it('expands all to the targets APM auto-detects, not the explicit-only ones', async () => {
+      const { system } = await pack('name: p\ntargets: all\n');
+      const offered = readHarnesses(system);
+      expect(offered).toContain('gemini');
+      expect(offered).toContain('kiro');
+      for (const explicitOnly of ['antigravity', 'hermes', 'agent-skills']) {
+        expect(offered).not.toContain(explicitOnly);
+      }
+    });
+
+    it('offers nothing for a declaration naming only unknown targets', async () => {
+      const { system } = await pack('name: p\ntargets: [not-a-harness]\n');
+      expect(readHarnesses(system)).toEqual([]);
+      expect(readInstallCommands(system)).toEqual({});
+    });
   });
 
   it('prefers the publisher catalogue for the score, and keeps the commit it was measured at', async () => {
