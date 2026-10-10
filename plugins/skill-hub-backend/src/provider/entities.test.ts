@@ -402,6 +402,18 @@ publish:
     });
 
     it.each([
+      ['a scalar', 'just some text'],
+      ['a list', '- a\n- b'],
+    ])('treats an apm.yml that is %s as a refused pack, not a crash', async (_, yaml) => {
+      // The reviewer's case: `'targets' in "text"` throws, which sent the
+      // whole repository to error and kept serving its stale entities.
+      const { system, warnings } = await pack(`${yaml}\n`);
+      expect(readHarnesses(system)).toEqual([]);
+      expect(readInstallCommands(system)).toEqual({});
+      expect(warnings).toEqual([expect.stringMatching(/packages\/p.*mapping/)]);
+    });
+
+    it.each([
       ['an empty list', 'targets: []'],
       ['no value', 'targets:'],
       ['both keys at once', 'targets: [claude]\ntarget: claude'],

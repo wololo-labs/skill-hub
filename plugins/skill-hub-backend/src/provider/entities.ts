@@ -263,8 +263,10 @@ function packageHarnesses(
   apm: Record<string, unknown>,
   manifest: AgentAssetsManifest,
   dir: string,
+  refusal?: string,
 ): { harnesses: string[]; warnings: string[] } {
-  const { tokens, error } = declaredTargets(apm);
+  const { tokens, error: declarationError } = declaredTargets(apm);
+  const error = refusal ?? declarationError;
   const where = dir || '(repository root)';
   if (error) {
     // APM refuses to read a manifest like this, so the pack cannot be
@@ -456,8 +458,16 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
     if (!matches(path, manifest.publish.packages ?? [])) continue;
     const dir = dirname(path);
     let apm: Record<string, unknown>;
+    // Why APM would refuse to read this pack at all, when it would.
+    let refusal: string | undefined;
     try {
-      apm = (parseYaml(await read(path)) ?? {}) as Record<string, unknown>;
+      const parsed = parseYaml(await read(path)) ?? {};
+      if (typeof parsed === 'object' && !Array.isArray(parsed)) {
+        apm = parsed as Record<string, unknown>;
+      } else {
+        apm = {};
+        refusal = 'is not a YAML mapping';
+      }
     } catch {
       continue;
     }
@@ -481,7 +491,7 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
         ) as Array<Record<string, unknown>>)
       : [];
 
-    const declared = packageHarnesses(apm, manifest, dir);
+    const declared = packageHarnesses(apm, manifest, dir, refusal);
     warnings.push(...declared.warnings);
     const info: PackageInfo = {
       dir,
