@@ -20,13 +20,14 @@ export const ANNOTATION_APM_PACKAGE = 'wololo.dev/apm-package';
 /**
  * Harness slugs the install panel can name, in display order. These are APM's
  * canonical `--target` slugs, so any slug a package declares in its own
- * `targets:` has a label here. The first three are the ones a repository
- * manifest may name for standalone assets, which install through ainb.
+ * `targets:` has a label here. The ones flagged `manifest` are the ones a
+ * repository manifest may name for standalone assets, which install through
+ * ainb.
  */
 export const HARNESSES = [
-  { id: 'claude', label: 'Claude Code' },
-  { id: 'copilot', label: 'GitHub Copilot' },
-  { id: 'codex', label: 'Codex' },
+  { id: 'claude', label: 'Claude Code', manifest: true },
+  { id: 'copilot', label: 'GitHub Copilot', manifest: true },
+  { id: 'codex', label: 'Codex', manifest: true },
   { id: 'cursor', label: 'Cursor' },
   { id: 'gemini', label: 'Gemini CLI' },
   { id: 'opencode', label: 'OpenCode' },

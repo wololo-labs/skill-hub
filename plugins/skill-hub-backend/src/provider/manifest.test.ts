@@ -1,3 +1,4 @@
+import { HARNESSES } from '@internal/plugin-skill-hub-common';
 import { ManifestError, parseManifest } from './manifest';
 
 describe('parseManifest', () => {
@@ -57,5 +58,19 @@ publish:
     expect(() =>
       parseManifest('owner: team\npublish:\n  widgets: w/*.md'),
     ).toThrow(/unknown publish key widgets/);
+  });
+});
+
+describe('which harnesses a repository manifest may name', () => {
+  it('are the ones flagged as manifest harnesses, wherever they sit in the list', () => {
+    expect(
+      HARNESSES.filter(h => 'manifest' in h && h.manifest).map(h => h.id),
+    ).toEqual(['claude', 'copilot', 'codex']);
+  });
+
+  it('refuses a harness that is not flagged, and says which are allowed', () => {
+    expect(() =>
+      parseManifest('owner: t\nharnesses: [cursor]\npublish:\n  skills: s/*\n'),
+    ).toThrow(/unknown harness cursor, expected one of claude, copilot, codex/);
   });
 });

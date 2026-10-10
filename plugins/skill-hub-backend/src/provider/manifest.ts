@@ -1,4 +1,5 @@
 import { parse as parseYaml } from 'yaml';
+import { HARNESSES } from '@internal/plugin-skill-hub-common';
 
 /**
  * The asset kinds a repository can publish. These are the keys under
@@ -50,7 +51,9 @@ export interface AgentAssetsManifest {
  */
 export class ManifestError extends Error {}
 
-const KNOWN_HARNESSES = ['claude', 'copilot', 'codex'];
+const KNOWN_HARNESSES: string[] = HARNESSES.filter(
+  h => 'manifest' in h && h.manifest,
+).map(h => h.id);
 
 function asStringArray(value: unknown, field: string): string[] {
   if (typeof value === 'string') return [value];
