@@ -114,10 +114,20 @@ export function describeVerdict(score: EvalScore): string {
  * The change over the model alone with its interval, for the places that
  * spell it out. A missing mean is said to be unrecorded, never left blank.
  */
-export function describeChange(stats: EvalStats | undefined): string | undefined {
-  if (stats?.ciLow === undefined || stats.ciHigh === undefined) return undefined;
-  const mean = stats.meanDelta?.toFixed(4) ?? 'unrecorded';
-  return `${mean} (${stats.ciLow.toFixed(4)} to ${stats.ciHigh.toFixed(4)})`;
+export function describeChange(
+  stats: EvalStats | undefined,
+): string | undefined {
+  if (!stats) return undefined;
+  const { meanDelta, ciLow, ciHigh } = stats;
+  const hasInterval = ciLow !== undefined && ciHigh !== undefined;
+  if (meanDelta === undefined && !hasInterval) return undefined;
+
+  // Four places and a sign: three would show a significant +0.0004 as +0.000.
+  const signed = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(4)}`;
+  const mean = meanDelta === undefined ? 'unrecorded' : signed(meanDelta);
+  return hasInterval
+    ? `${mean} (${ciLow.toFixed(4)} to ${ciHigh.toFixed(4)})`
+    : mean;
 }
 
 /** A commit as git abbreviates one: 7 to 40 hex digits, lower cased. */

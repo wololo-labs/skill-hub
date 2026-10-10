@@ -1,6 +1,7 @@
 import { Tooltip, makeStyles } from '@material-ui/core';
 import {
   EvalScore,
+  describeChange,
   describeVerdict,
   isMeasuredWorse,
   isScoreStale,
@@ -147,27 +148,15 @@ export const ScoreBadge = ({
     unscored: classes.unscored,
   }[state];
   const headline = topMetric(score);
-  const ci = score.stats;
-  const interval =
-    ci?.ciLow !== undefined && ci.ciHigh !== undefined
-      ? ` Mean change over the model alone ${
-          ci.meanDelta?.toFixed(4) ?? 'unrecorded'
-        }, ${Math.round(
-          (ci.confidence ?? 0.95) * 100,
-        )}% interval ${ci.ciLow.toFixed(4)} to ${ci.ciHigh.toFixed(4)}.`
-      : '';
-
-  // What the badge states is the change over the model alone, not the
-  // candidate's own mean, which says nothing about whether the asset helped.
-  const signed = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(3)}`;
-  const gain =
-    state === 'gain' && ci?.meanDelta !== undefined
-      ? `${signed(ci.meanDelta)}${
-          ci.ciLow !== undefined && ci.ciHigh !== undefined
-            ? ` (CI ${ci.ciLow.toFixed(3)} to ${ci.ciHigh.toFixed(3)})`
-            : ''
-        }`
-      : undefined;
+  // One description of the change, here and on the page, so the two cannot
+  // round it differently.
+  const change = describeChange(score.stats);
+  const interval = change
+    ? ` Change over the model alone ${change}, ${Math.round(
+        (score.stats?.confidence ?? 0.95) * 100,
+      )}% interval.`
+    : '';
+  const gain = state === 'gain' ? change : undefined;
 
   // The number on the badge means nothing on its own, so what it measures
   // travels with it: in the tooltip for a pointer, and in the accessible name

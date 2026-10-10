@@ -119,10 +119,19 @@ describe('readEvalScore on a legacy or hand-written score', () => {
 });
 
 describe('describeChange', () => {
-  it('states the change with its interval', () => {
+  it('states the change, signed, with its interval', () => {
     expect(
       describeChange({ meanDelta: 0.052, ciLow: 0.021, ciHigh: 0.084 }),
-    ).toBe('0.0520 (0.0210 to 0.0840)');
+    ).toBe('+0.0520 (0.0210 to 0.0840)');
+    expect(
+      describeChange({ meanDelta: -0.061, ciLow: -0.09, ciHigh: -0.03 }),
+    ).toBe('-0.0610 (-0.0900 to -0.0300)');
+  });
+
+  it('does not round a small significant gain down to zero', () => {
+    expect(
+      describeChange({ meanDelta: 0.0004, ciLow: 0.0002, ciHigh: 0.0006 }),
+    ).toBe('+0.0004 (0.0002 to 0.0006)');
   });
 
   it('says unrecorded when the mean is missing, never a blank', () => {
@@ -131,8 +140,9 @@ describe('describeChange', () => {
     );
   });
 
-  it('has nothing to say without an interval', () => {
-    expect(describeChange({ meanDelta: 0.1 })).toBeUndefined();
+  it('gives the mean alone when there is no interval, and nothing when there is neither', () => {
+    expect(describeChange({ meanDelta: 0.1 })).toBe('+0.1000');
+    expect(describeChange({})).toBeUndefined();
     expect(describeChange(undefined)).toBeUndefined();
   });
 });

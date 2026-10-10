@@ -89,7 +89,7 @@ describe('the four score states', () => {
     );
     // The badge shows the gain over the model alone, not the candidate's mean.
     expect(
-      await screen.findAllByText('+0.052 (CI 0.021 to 0.090)'),
+      await screen.findAllByText('+0.0520 (0.0210 to 0.0900)'),
     ).not.toHaveLength(0);
     expect(command()).toBeInTheDocument();
     expect(screen.queryByText(/No measured gain/)).not.toBeInTheDocument();
