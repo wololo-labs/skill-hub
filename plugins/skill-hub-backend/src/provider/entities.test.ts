@@ -469,6 +469,16 @@ publish:
       expect(warnings).toEqual([expect.stringMatching(/packages\/p.*mapping/)]);
     });
 
+    it('treats an apm.yml that does not parse as a refused pack, members included', async () => {
+      // Skipping it silently left its members looking like standalone assets,
+      // installable to every harness, from a pack APM cannot read.
+      const { system, skill, warnings } = await pack('name: [unclosed\n');
+      expect(readInstallCommands(system)).toEqual({});
+      expect(readHarnesses(skill)).toEqual([]);
+      expect(readInstallCommands(skill)).toEqual({});
+      expect(warnings).toEqual([expect.stringMatching(/packages\/p.*parsed/)]);
+    });
+
     it.each([
       ['an empty list', 'targets: []'],
       ['no value', 'targets:'],
@@ -616,7 +626,7 @@ publish:
   });
 
   it('survives an unreadable asset without dropping the rest', async () => {
-    const { entities } = await buildEntities({
+    const { entities, warnings } = await buildEntities({
       repo: REPO,
       commitSha: SHA,
       manifest: parseManifest(
@@ -628,7 +638,12 @@ publish:
       }),
     });
 
-    expect(entities.map(e => e.metadata.name)).toEqual(['fine']);
+    // The unparseable pack is kept as a refused one, with nothing to install,
+    // and the pack beside it is untouched.
+    expect(entities.map(e => e.metadata.name)).toEqual(['broken', 'fine']);
+    expect(readInstallCommands(find(entities, 'System', 'broken')!)).toEqual({});
+    expect(Object.keys(readInstallCommands(find(entities, 'System', 'fine')!))).toContain('claude');
+    expect(warnings).toEqual([expect.stringContaining('packages/broken')]);
   });
 });
 

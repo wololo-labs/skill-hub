@@ -479,7 +479,10 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
         refusal = 'is not a YAML mapping';
       }
     } catch {
-      continue;
+      // Not the pack's own fault to be silent about: its members would
+      // otherwise look standalone and install everywhere.
+      apm = {};
+      refusal = 'could not be parsed as YAML';
     }
     const name = typeof apm.name === 'string' ? apm.name : stem(dir || path);
     const score = readPackageScore(
