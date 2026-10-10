@@ -59,6 +59,8 @@ const wrap = (node: ReactNode) =>
         theme={createTheme({
           palette: {
             highlight: '#eef',
+            warningBackground: '#fed',
+            warningText: '#630',
             infoText: '#223',
             textSubtle: '#666',
             status: { ok: '#2a2', error: '#c22', warning: '#a60' },

@@ -64,13 +64,13 @@ const useStyles = makeStyles(theme => ({
     borderStyle: 'dashed',
     fontWeight: 600,
   },
-  // Passed, but nothing shows it beats the model alone. Filled like a pass
-  // would be, so it cannot be mistaken for a failure, but dashed like
-  // unscored, so it cannot be mistaken for a demonstrated gain.
+  // Passed, but nothing shows it beats the model alone. Amber and dashed: not
+  // the green of a demonstrated gain, not the red of a failure, and not the
+  // grey of unscored.
   nogain: {
-    backgroundColor: 'transparent',
-    color: theme.palette.infoText,
-    borderColor: theme.palette.status.ok,
+    backgroundColor: theme.palette.warningBackground,
+    color: theme.palette.warningText,
+    borderColor: theme.palette.status.warning,
     borderStyle: 'dashed',
   },
   pair: {
