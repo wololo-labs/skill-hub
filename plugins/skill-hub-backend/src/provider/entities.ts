@@ -492,6 +492,16 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
     return system ? { system } : {};
   };
 
+  // An asset inside a pack installs as that pack, so it is offered what the
+  // pack is; a standalone asset takes the repository manifest's harnesses and
+  // installs as itself. One place decides both, so the two cannot drift.
+  const harnessesOf = (pkg: PackageInfo | undefined): string[] =>
+    pkg?.harnesses ?? manifest.harnesses;
+  const installTarget = (pkg: PackageInfo | undefined, path: string) =>
+    pkg
+      ? ({ kind: 'package', dir: pkg.dir } as const)
+      : ({ kind: 'unit', path } as const);
+
   const owningPackage = (path: string): PackageInfo | undefined =>
     packages
       .filter(p => p.dir === '' || path.startsWith(`${p.dir}/`))
@@ -507,7 +517,7 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
       continue;
     }
     const pkg = owningPackage(path);
-    const harnesses = pkg?.harnesses ?? manifest.harnesses;
+    const harnesses = harnessesOf(pkg);
     const name = typeof server.name === 'string' ? server.name : stem(path);
     entities.push({
       apiVersion: 'backstage.io/v1alpha1',
@@ -528,9 +538,7 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
               repo,
               commitSha,
               harnesses,
-              pkg
-                ? { kind: 'package', dir: pkg.dir }
-                : { kind: 'unit', path },
+              installTarget(pkg, path),
             ),
           ),
         },
@@ -571,7 +579,7 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
         : stem(path).replace(/\.(agent|instructions|prompt|eval)$/, '');
       const name = entityName(described.name ?? fallbackName);
       const pkg = owningPackage(path);
-      const harnesses = pkg?.harnesses ?? manifest.harnesses;
+      const harnesses = harnessesOf(pkg);
 
       entities.push({
         apiVersion: 'backstage.io/v1alpha1',
@@ -590,9 +598,7 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
                 repo,
                 commitSha,
                 harnesses,
-                pkg
-                  ? { kind: 'package', dir: pkg.dir }
-                  : { kind: 'unit', path: assetPath },
+                installTarget(pkg, assetPath),
               ),
             ),
           },
