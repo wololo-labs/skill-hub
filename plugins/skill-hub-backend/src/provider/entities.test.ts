@@ -318,6 +318,11 @@ publish:
 
       const outside = await pack('name: p\ntargets: [cursor]\n', narrowed);
       expect(readHarnesses(outside.system)).toEqual([]);
+      // A pack nobody can install is a catalogue-level problem, not a silent
+      // empty list: the owner is told which pack and why.
+      expect(outside.warnings).toEqual([
+        expect.stringMatching(/packages\/p.*cursor.*no install command/),
+      ]);
     });
 
     it('falls back to the repository manifest when the pack declares nothing', async () => {

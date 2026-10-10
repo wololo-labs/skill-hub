@@ -272,7 +272,9 @@ function packageHarnesses(
     // harnesses would hand over a command that fails.
     return {
       harnesses: [],
-      warnings: [`${where}: apm.yml ${error}, so no install command is offered`],
+      warnings: [
+        `${where}: apm.yml ${error}, so no install command is offered`,
+      ],
     };
   }
   if (!tokens) return { harnesses: manifest.harnesses, warnings: [] };
@@ -283,16 +285,26 @@ function packageHarnesses(
   // so a pack declaring more does not widen that. One that left it out has
   // only taken the default, which is not a limit on a pack.
   const allowed = manifest.harnessesExplicit ? manifest.harnesses : known;
-  return {
-    harnesses: known.filter(id => tokens.includes(id) && allowed.includes(id)),
-    warnings: unknown.length
-      ? [
-          `${where}: apm.yml declares targets this hub does not know (${unknown.join(
-            ', ',
-          )}), so they are not offered`,
-        ]
-      : [],
-  };
+  const harnesses = known.filter(
+    id => tokens.includes(id) && allowed.includes(id),
+  );
+  const warnings = unknown.length
+    ? [
+        `${where}: apm.yml declares targets this hub does not know (${unknown.join(
+          ', ',
+        )}), so they are not offered`,
+      ]
+    : [];
+  // A pack nobody can install is a problem with the pack or the repository's
+  // harnesses, and it should be reported rather than shown as an empty list.
+  if (!harnesses.length && !warnings.length) {
+    warnings.push(
+      `${where}: apm.yml declares ${tokens.join(
+        ', ',
+      )}, none of which this repository's harnesses allow, so no install command is offered`,
+    );
+  }
+  return { harnesses, warnings };
 }
 
 /**
@@ -321,7 +333,8 @@ function declaredTargets(apm: Record<string, unknown>): {
 } {
   const hasTargets = 'targets' in apm;
   const hasTarget = 'target' in apm;
-  if (hasTargets && hasTarget) return { error: 'declares both targets and target' };
+  if (hasTargets && hasTarget)
+    return { error: 'declares both targets and target' };
   if (!hasTargets && !hasTarget) return {};
 
   const key = hasTargets ? 'targets' : 'target';
