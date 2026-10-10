@@ -579,6 +579,14 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
       const parsed = parseYaml(source) ?? {};
       if (typeof parsed === 'object' && !Array.isArray(parsed)) {
         apm = parsed as Record<string, unknown>;
+        // APM refuses a pack whose name or version is not a non-empty string
+        // (apm_cli/models/apm_package.py), whatever else it declares.
+        const blank = (v: unknown) => typeof v !== 'string' || !v.trim();
+        if (blank(apm.name)) {
+          refusal = 'has no name, which APM requires';
+        } else if (blank(apm.version)) {
+          refusal = 'has no version, which APM requires';
+        }
       } else {
         apm = {};
         refusal = 'is not a YAML mapping';
@@ -589,7 +597,10 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
       apm = {};
       refusal = 'could not be parsed as YAML';
     }
-    const name = typeof apm.name === 'string' ? apm.name : stem(dir || path);
+    const name =
+      typeof apm.name === 'string' && apm.name.trim()
+        ? apm.name
+        : stem(dir || path);
     const score = readPackageScore(
       paths.has(`${dir}/eval-gate-report.json`)
         ? await read(`${dir}/eval-gate-report.json`)
