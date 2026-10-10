@@ -1,15 +1,61 @@
 import {
-  EvalScore,
+  APM_ACCEPTED_NOT_OFFERED,
+  APM_ALL_TARGETS,
+  APM_EXPLICIT_ONLY_TARGETS,
+  APM_TARGETS_VERSION,
   describeBaseline,
   describeChange,
   describeConfidence,
   describeOrigin,
   describeVerdict,
+  EvalScore,
+  HARNESSES,
   isScoreStale,
   passedGate,
   readEvalScore,
   scoreState,
 } from './index';
+
+describe('the targets the hub can name', () => {
+  // The targets `apm.yml` accepts at APM_TARGETS_VERSION: every capability in
+  // apm_cli/core/target_catalog.py with no experimental flag and not MCP-only,
+  // read from the 0.33.0 wheel. `vscode` is an alias of copilot, not a target.
+  const APM_STABLE_TARGETS = [
+    'agent-skills',
+    'antigravity',
+    'claude',
+    'codex',
+    'copilot',
+    'cursor',
+    'gemini',
+    'grok-build',
+    'hermes',
+    'kiro',
+    'opencode',
+    'windsurf',
+  ];
+
+  it('are exactly the targets APM accepts, at the version they were taken from', () => {
+    expect(APM_TARGETS_VERSION).toBe('0.33.0');
+    expect(HARNESSES.map(h => h.id).sort()).toEqual(APM_STABLE_TARGETS);
+  });
+});
+
+describe('the target sets pinned to APM 0.33.0', () => {
+  const ids = HARNESSES.map(h => h.id) as string[];
+
+  it('keeps all, explicit-only and not-offered consistent with the hub list', () => {
+    // all is every auto-detected target (APM's ALL_CANONICAL_TARGETS), which is
+    // the hub's list minus the explicit-only ones.
+    expect([...APM_ALL_TARGETS].sort()).toEqual(
+      ids.filter(id => !APM_EXPLICIT_ONLY_TARGETS.includes(id)).sort(),
+    );
+    // Not-offered targets are ones APM accepts and the hub has no command for.
+    for (const name of APM_ACCEPTED_NOT_OFFERED) {
+      expect(ids).not.toContain(name);
+    }
+  });
+});
 
 const stats = (significantImprovement: boolean) => ({
   meanDelta: 0.0003,
@@ -22,7 +68,11 @@ const stats = (significantImprovement: boolean) => ({
 describe('scoreState', () => {
   it('is a gain only for a pass with a significant improvement', () => {
     expect(
-      scoreState({ verdict: 'PASS', origin: 'gate-report', stats: stats(true) }),
+      scoreState({
+        verdict: 'PASS',
+        origin: 'gate-report',
+        stats: stats(true),
+      }),
     ).toBe('gain');
   });
 
@@ -42,9 +92,9 @@ describe('scoreState', () => {
   ] as const)('never reads a gain claimed by %s as one', (_, origin) => {
     // Only a gate run can show an improvement. Anything else can say it passed,
     // not that it beats the model alone.
-    expect(
-      scoreState({ verdict: 'PASS', origin, stats: stats(true) }),
-    ).toBe('no-gain');
+    expect(scoreState({ verdict: 'PASS', origin, stats: stats(true) })).toBe(
+      'no-gain',
+    );
   });
 
   it('is no demonstrated gain for a pass without one', () => {
@@ -106,7 +156,7 @@ describe('readEvalScore on a legacy or hand-written score', () => {
         name: 'x',
         annotations: { 'wololo.dev/eval-score': JSON.stringify(raw) },
       },
-    }) as any;
+    } as any);
 
   it('keeps only values of the right type, so no surface has to guard', () => {
     const score = readEvalScore(
@@ -130,7 +180,9 @@ describe('readEvalScore on a legacy or hand-written score', () => {
   });
 
   it('never throws when asked whether a hand-written score is stale', () => {
-    const score = readEvalScore(entityWith({ verdict: 'PASS', measuredCommit: 1234567 }));
+    const score = readEvalScore(
+      entityWith({ verdict: 'PASS', measuredCommit: 1234567 }),
+    );
     expect(() => isScoreStale(score, 'abc1234')).not.toThrow();
   });
 });
@@ -167,7 +219,12 @@ describe('describeChange', () => {
     'shows no interval when the confidence is %s, rather than assuming one',
     confidence => {
       expect(
-        describeChange({ meanDelta: 0.052, ciLow: 0.021, ciHigh: 0.084, confidence }),
+        describeChange({
+          meanDelta: 0.052,
+          ciLow: 0.021,
+          ciHigh: 0.084,
+          confidence,
+        }),
       ).toBe('+0.0520');
     },
   );
@@ -196,9 +253,9 @@ describe('describeConfidence', () => {
 describe('describeBaseline', () => {
   it("says the gate's baseline unless the report states a no-skill one", () => {
     expect(describeBaseline({ verdict: 'PASS' })).toBe("the gate's baseline");
-    expect(describeBaseline({ verdict: 'PASS', baselineKind: 'no-skill' })).toBe(
-      'the model alone',
-    );
+    expect(
+      describeBaseline({ verdict: 'PASS', baselineKind: 'no-skill' }),
+    ).toBe('the model alone');
   });
 
   it('reads the kind from a report and ignores a value it does not know', () => {
@@ -209,7 +266,10 @@ describe('describeBaseline', () => {
         metadata: {
           name: 'x',
           annotations: {
-            'wololo.dev/eval-score': JSON.stringify({ verdict: 'PASS', baselineKind }),
+            'wololo.dev/eval-score': JSON.stringify({
+              verdict: 'PASS',
+              baselineKind,
+            }),
           },
         },
       } as any)!;
@@ -223,7 +283,11 @@ describe('one definition of a passed gate', () => {
     undefined,
     {},
     { verdict: 'pass' },
-    { verdict: 'PASS', origin: 'gate-report', stats: { significantImprovement: true } },
+    {
+      verdict: 'PASS',
+      origin: 'gate-report',
+      stats: { significantImprovement: true },
+    },
     { verdict: 'PASS', stats: { significantRegression: true } },
     { verdict: 'REGRESSION' },
     { verdict: 'REFUSED' },
@@ -248,7 +312,7 @@ describe('a score whose statistics are written in snake case', () => {
         name: 'x',
         annotations: { 'wololo.dev/eval-score': JSON.stringify(raw) },
       },
-    }) as any;
+    } as any);
 
   it('reads a significant regression, so a measurably worse asset is not installable', () => {
     const score = readEvalScore(
@@ -300,7 +364,10 @@ describe('measuredCommit', () => {
       metadata: {
         name: 'x',
         annotations: {
-          'wololo.dev/eval-score': JSON.stringify({ verdict: 'PASS', measuredCommit }),
+          'wololo.dev/eval-score': JSON.stringify({
+            verdict: 'PASS',
+            measuredCommit,
+          }),
         },
       },
     } as any)!;
@@ -325,8 +392,12 @@ describe('measuredCommit', () => {
   });
 
   it('compares without regard to case', () => {
-    expect(isScoreStale(read('ABCDEF1'), `abcdef1${'0'.repeat(33)}`)).toBe(false);
-    expect(isScoreStale(read('abcdef1'), `ABCDEF1${'0'.repeat(33)}`)).toBe(false);
+    expect(isScoreStale(read('ABCDEF1'), `abcdef1${'0'.repeat(33)}`)).toBe(
+      false,
+    );
+    expect(isScoreStale(read('abcdef1'), `ABCDEF1${'0'.repeat(33)}`)).toBe(
+      false,
+    );
   });
 
   it('has nothing to compare against when the pinned commit is unknown or not a commit', () => {
@@ -350,7 +421,10 @@ describe('a statistic written in both spellings', () => {
       metadata: {
         name: 'x',
         annotations: {
-          'wololo.dev/eval-score': JSON.stringify({ verdict: 'PASS', stats: written }),
+          'wololo.dev/eval-score': JSON.stringify({
+            verdict: 'PASS',
+            stats: written,
+          }),
         },
       },
     } as any)!;
@@ -379,7 +453,10 @@ describe('where a score came from', () => {
         metadata: {
           name: 'x',
           annotations: {
-            'wololo.dev/eval-score': JSON.stringify({ verdict: 'PASS', origin }),
+            'wololo.dev/eval-score': JSON.stringify({
+              verdict: 'PASS',
+              origin,
+            }),
           },
         },
       } as any)!.origin;
@@ -391,8 +468,12 @@ describe('where a score came from', () => {
 
   it('is labelled in words, with the ones that are not a gate run saying so', () => {
     expect(describeOrigin('gate-report')).toBe('a gate report');
-    expect(describeOrigin('eval-score')).toBe('an eval-score.json, not a gate run');
-    expect(describeOrigin('catalogue')).toBe('a catalogue file, not a gate run');
+    expect(describeOrigin('eval-score')).toBe(
+      'an eval-score.json, not a gate run',
+    );
+    expect(describeOrigin('catalogue')).toBe(
+      'a catalogue file, not a gate run',
+    );
     expect(describeOrigin(undefined)).toBe('an unknown source, not a gate run');
   });
 });

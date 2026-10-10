@@ -130,6 +130,22 @@ describe('AgentAssetEntityProvider', () => {
     ]);
   });
 
+  it('still publishes a repository whose pack declares no usable targets, and reports it', async () => {
+    const { status, mutations } = await run({
+      'wololo-labs': {
+        broken: {
+          manifest: 'owner: team\npublish:\n  packages: packages/*/apm.yml\n',
+          files: { 'packages/p/apm.yml': 'name: p\ntargets: []\n' },
+        },
+      },
+    });
+
+    expect(mutations[0].map(e => e.entity.metadata.name)).toEqual(['p']);
+    const reported = status.latest().repositories[0];
+    expect(reported.state).toBe('published');
+    expect(reported.warnings).toEqual([expect.stringContaining('packages/p')]);
+  });
+
   it('skips a malformed manifest with one clear error and finishes the sync', async () => {
     const { status, mutations } = await run({
       'wololo-labs': {

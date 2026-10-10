@@ -6,11 +6,13 @@ import {
   ANNOTATION_REPO,
   EvalScore,
   InstallCommands,
+  InstallUnavailable,
   ScoreState,
   scoreState,
   readEvalScore,
   readHarnesses,
   readInstallCommands,
+  readInstallUnavailable,
 } from '@internal/plugin-skill-hub-common';
 
 /** One row on the browse page: an entity, flattened to what the hub shows. */
@@ -30,6 +32,8 @@ export interface Asset {
   score?: EvalScore;
   scoreRef?: string;
   install: InstallCommands;
+  /** Why there is no install command, when there is none. */
+  installUnavailable?: InstallUnavailable;
   tags: string[];
 }
 
@@ -58,6 +62,7 @@ export function toAsset(entity: Entity): Asset {
     score: readEvalScore(entity),
     scoreRef: annotations[ANNOTATION_EVAL_SCORE_REF],
     install: readInstallCommands(entity),
+    installUnavailable: readInstallUnavailable(entity),
     tags: entity.metadata.tags ?? [],
   };
 }

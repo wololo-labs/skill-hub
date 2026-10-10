@@ -183,6 +183,9 @@ export class AgentAssetEntityProvider implements EntityProvider {
                 .join(', ')}`,
             );
           }
+          for (const warning of built.warnings) {
+            logger.warn(`${name}: ${warning}`);
+          }
           logger.info(
             `${name} published ${built.entities.length} entities at ${manifest.commitSha.slice(0, 8)}`,
           );
@@ -194,6 +197,7 @@ export class AgentAssetEntityProvider implements EntityProvider {
               commit: manifest.commitSha,
               assets: built.counts,
               entityCount: built.entities.length,
+              ...(built.warnings.length ? { warnings: built.warnings } : {}),
             },
           };
         } catch (error) {

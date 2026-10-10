@@ -10,6 +10,8 @@ export const ANNOTATION_EVAL_SCORE = 'wololo.dev/eval-score';
 export const ANNOTATION_EVAL_SCORE_REF = 'wololo.dev/eval-score-ref';
 export const ANNOTATION_HARNESSES = 'wololo.dev/harnesses';
 export const ANNOTATION_INSTALL = 'wololo.dev/install';
+/** Why an asset offers no install command, when it offers none. */
+export const ANNOTATION_INSTALL_UNAVAILABLE = 'wololo.dev/install-unavailable';
 export const ANNOTATION_REPO = 'wololo.dev/repo';
 export const ANNOTATION_COMMIT = 'wololo.dev/commit';
 export const ANNOTATION_ASSET_PATH = 'wololo.dev/asset-path';
@@ -17,12 +19,73 @@ export const ANNOTATION_ASSET_PATH = 'wololo.dev/asset-path';
 export const ANNOTATION_BODY_PATH = 'wololo.dev/body-path';
 export const ANNOTATION_APM_PACKAGE = 'wololo.dev/apm-package';
 
-/** Harness slugs the install panel offers, in display order. */
+/**
+ * Harness slugs the install panel can name, in display order. These are APM's
+ * canonical `--target` slugs, so any slug a package declares in its own
+ * `targets:` has a label here, and a repository manifest may name any of them.
+ * The ones flagged `standalone` are the ones a standalone asset, which installs
+ * through ainb and not APM, can be offered, and the default when a manifest
+ * names none.
+ */
 export const HARNESSES = [
-  { id: 'claude', label: 'Claude Code' },
-  { id: 'copilot', label: 'GitHub Copilot' },
-  { id: 'codex', label: 'Codex' },
+  { id: 'claude', label: 'Claude Code', standalone: true },
+  { id: 'copilot', label: 'GitHub Copilot', standalone: true },
+  { id: 'codex', label: 'Codex', standalone: true },
+  { id: 'cursor', label: 'Cursor' },
+  { id: 'gemini', label: 'Gemini CLI' },
+  { id: 'opencode', label: 'OpenCode' },
+  { id: 'windsurf', label: 'Windsurf' },
+  { id: 'kiro', label: 'Kiro' },
+  { id: 'grok-build', label: 'Grok Build' },
+  { id: 'antigravity', label: 'Antigravity' },
+  { id: 'hermes', label: 'Hermes' },
+  { id: 'agent-skills', label: 'Agent Skills' },
 ] as const;
+
+/**
+ * The APM release the list above was taken from. A pack may declare a target
+ * newer than this, so the hub's list is not proof that a target is wrong, only
+ * that the hub has not been taught it. A test pins the list to this version.
+ */
+export const APM_TARGETS_VERSION = '0.33.0';
+
+/**
+ * What the singular `target: all` in apm.yml means to APM: every target it
+ * auto-detects (`ALL_CANONICAL_TARGETS`, with APM's `vscode` as `copilot`).
+ * The explicit-only targets are not part of it, and may be added to it.
+ */
+export const APM_ALL_TARGETS: readonly string[] = [
+  'claude',
+  'codex',
+  'copilot',
+  'cursor',
+  'gemini',
+  'grok-build',
+  'kiro',
+  'opencode',
+  'windsurf',
+];
+
+/** Targets that are only ever deployed to when named, never by `all`. */
+export const APM_EXPLICIT_ONLY_TARGETS: readonly string[] = [
+  'agent-skills',
+  'antigravity',
+  'grok-cloud',
+  'hermes',
+];
+
+/**
+ * Targets the singular `target:` field accepts that the hub has no label or
+ * command for: experimental, or MCP only. APM reads a pack naming them
+ * normally, so they are not an error, they are just not offered.
+ */
+export const APM_ACCEPTED_NOT_OFFERED: readonly string[] = [
+  'copilot-app',
+  'copilot-cowork',
+  'grok-cloud',
+  'intellij',
+  'openclaw',
+];
 
 export type HarnessId = (typeof HARNESSES)[number]['id'];
 
@@ -206,6 +269,30 @@ export function isScoreStale(
   // and stays stale, shown as written.
   const isCommit = /^[0-9a-f]{7,40}$/.test(measured);
   return !isCommit || (!pinned.startsWith(measured) && !measured.startsWith(pinned));
+}
+
+/**
+ * Why there is no install command: `refused` APM would not read the pack's
+ * manifest, `narrowed` the repository's own harnesses list leaves out every
+ * target the pack declares, `unknown-target` the pack declares only targets
+ * this hub has not been taught, `path` the path would not survive a shell.
+ */
+export type InstallUnavailable =
+  | 'refused'
+  | 'narrowed'
+  | 'unknown-target'
+  | 'path';
+
+export function readInstallUnavailable(
+  entity: Entity,
+): InstallUnavailable | undefined {
+  const value = annotation(entity, ANNOTATION_INSTALL_UNAVAILABLE);
+  return value === 'refused' ||
+    value === 'narrowed' ||
+    value === 'unknown-target' ||
+    value === 'path'
+    ? value
+    : undefined;
 }
 
 /** Install command per harness, keyed by harness id. */

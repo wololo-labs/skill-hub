@@ -188,3 +188,44 @@ reason:      Install is blocked until this asset has a score
 explanation: Nobody has run an eval gate against this asset, so there is
              nothing to say whether it works.
 ```
+
+## Re-run on APM 0.33.0, 2026-10-05
+
+The commands above were run on APM 0.29.0. Upstream is now 0.33.0, so the same
+three panel commands were run again from empty directories under a throwaway
+`HOME`, against a binary downloaded from the `v0.33.0` release and checked
+against its published `.sha256` before it was executed.
+
+```console
+$ apm --version
+Agent Package Manager (APM) CLI version 0.33.0 (18c4c43)
+```
+
+| target | exit | what was deployed |
+| --- | --- | --- |
+| `claude` | 0 | 4 agents to `.claude/agents/`, 3 rules to `.claude/rules/`, 4 skills to `.claude/skills/`, MCP server in `.mcp.json` |
+| `copilot` | 0 | 4 agents and 3 instructions to `.github/`, 4 skills to `.agents/skills/`, MCP server in `.github/mcp.json` |
+| `codex` | 0 | the MCP server in `.codex/config.toml`, and nothing else |
+
+The pinned install line still resolves and deploys on the current release, so
+the hub's command shape is unchanged by four releases of APM.
+
+The Codex row is the finding. On 0.29.0 this was put down to Codex having no
+mapping for those primitives. On 0.33.0 APM says why, and it is not that:
+
+```console
+$ apm install '.../packages/qe-agent-pack#937cc70d...' --target codex
+  [!] [stevengonsalvez/ainb-toolkit/packages/qe-agent-pack] Package targets
+[claude, copilot] do not overlap authorized active targets; skipping
+[*] Installed 1 APM dependency and 1 MCP server in 4.4s.
+```
+
+The pack declares `targets: [copilot, claude]` in its own `apm.yml`, and APM
+treats that as a restriction. Asking for `--target codex` does not override it:
+the package's primitives are skipped, the install still exits 0 and still says
+it installed the dependency. A user who runs the Codex line the panel offered
+gets a success message and none of the pack.
+
+The panel therefore has to offer only the targets a pack declares. That is what
+the provider does from this point: a package's harnesses are its own `targets`,
+and only a package that declares none falls back to the repository manifest.

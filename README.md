@@ -56,7 +56,7 @@ that: the provider is authoritative for what it emitted.
 ```yaml
 owner: team-ai-platform      # required. A bare name means group:default/<name>.
 system: ai-tooling           # optional. A pack claims its own members first.
-harnesses: [claude, copilot, codex]   # optional, defaults to all three
+harnesses: [claude, copilot, codex]   # optional. Defaults to claude, copilot, codex.
 
 publish:
   skills:   skills/*/SKILL.md
@@ -68,6 +68,14 @@ publish:
   packages: packages/*/apm.yml
   mcp:      mcp/*.json
 ```
+
+`harnesses` may name any target the hub knows, which is every APM `--target`
+slug (`claude`, `copilot`, `codex`, `cursor`, `gemini`, `opencode`, `windsurf`,
+`kiro`, `grok-build`, `antigravity`, `hermes`, `agent-skills`). When you write
+it, it is a limit on everything the repository publishes: a pack that declares
+a target you left out does not offer it. Standalone assets, which install
+through ainb, are only offered `claude`, `copilot` and `codex`. A pack's own
+`targets:` in `apm.yml` decides what it is offered, within your list.
 
 Every key takes a string or a list of strings. A repository with a manifest and
 no matches appears with zero assets rather than vanishing, and a manifest that

@@ -3,10 +3,12 @@ import { Box, Typography, makeStyles } from '@material-ui/core';
 import { InfoCard, Link } from '@backstage/core-components';
 import { useApi } from '@backstage/core-plugin-api';
 import {
+  APM_TARGETS_VERSION,
   HARNESSES,
+  InstallUnavailable,
+  passedGate,
   describeBaseline,
   isMeasuredWorse,
-  passedGate,
   ScoreState,
   scoreState,
 } from '@internal/plugin-skill-hub-common';
@@ -214,6 +216,26 @@ function blocked(
   };
 }
 
+/**
+ * Which problem there is, not a list of the possible ones. The provider records
+ * the cause beside the empty command list, so a pack that is fine is never
+ * blamed for the hub being behind, and the reverse.
+ */
+const noCommandCause = (cause: InstallUnavailable | undefined): string => {
+  switch (cause) {
+    case 'refused':
+      return 'Its pack declares something APM would refuse, or its apm.yml cannot be read, so nothing in it can be installed until the pack is fixed. The sync warnings name the problem.';
+    case 'narrowed':
+      return "The repository's own harnesses list leaves out every target its pack declares. Add one to that list to offer it.";
+    case 'unknown-target':
+      return `Its pack declares a target APM ${APM_TARGETS_VERSION} does not accept, and APM refuses the whole pack over one. If the target is newer than that, the hub's list is the gap to fill, not the pack.`;
+    case 'path':
+      return 'Its path contains characters that would not survive being pasted into a shell.';
+    default:
+      return 'The sync warnings say why.';
+  }
+};
+
 export const InstallPanel = ({ asset, stale = false }: InstallPanelProps) => {
   const classes = useStyles();
   const api = useApi(skillHubApiRef);
@@ -233,8 +255,8 @@ export const InstallPanel = ({ asset, stale = false }: InstallPanelProps) => {
     return (
       <InfoCard title="Install">
         <Typography className={classes.body}>
-          This asset publishes no install command. That happens when its path
-          contains characters that would not survive being pasted into a shell.
+          This asset publishes no install command.{' '}
+          {noCommandCause(asset.installUnavailable)}
         </Typography>
       </InfoCard>
     );

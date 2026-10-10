@@ -59,3 +59,25 @@ publish:
     ).toThrow(/unknown publish key widgets/);
   });
 });
+
+describe('which harnesses a repository manifest may name', () => {
+  it('may name every target the hub knows, so an owner can opt a pack in', () => {
+    const manifest = parseManifest(
+      'owner: t\nharnesses: [claude, cursor]\npublish:\n  skills: s/*\n',
+    );
+    expect(manifest.harnesses).toEqual(['claude', 'cursor']);
+    expect(manifest.harnessesExplicit).toBe(true);
+  });
+
+  it('defaults to the three standalone assets can be installed to', () => {
+    const manifest = parseManifest('owner: t\npublish:\n  skills: s/*\n');
+    expect(manifest.harnesses).toEqual(['claude', 'copilot', 'codex']);
+    expect(manifest.harnessesExplicit).toBe(false);
+  });
+
+  it('still refuses a name the hub does not know, and lists the ones it does', () => {
+    expect(() =>
+      parseManifest('owner: t\nharnesses: [nonsense]\npublish:\n  skills: s/*\n'),
+    ).toThrow(/unknown harness nonsense, expected one of claude, copilot, codex, cursor/);
+  });
+});

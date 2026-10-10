@@ -15,6 +15,8 @@ export interface RepositoryStatus {
   commit?: string;
   assets?: Partial<Record<AssetKind, number>>;
   entityCount?: number;
+  /** Things the owner should fix that did not stop the repository publishing. */
+  warnings?: string[];
   error?: string;
 }
 
