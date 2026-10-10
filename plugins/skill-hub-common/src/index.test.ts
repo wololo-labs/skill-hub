@@ -135,3 +135,22 @@ describe('describeChange', () => {
     expect(describeChange(undefined)).toBeUndefined();
   });
 });
+
+describe('one definition of a passed gate', () => {
+  const scores: Array<EvalScore | undefined> = [
+    undefined,
+    {},
+    { verdict: 'pass' },
+    { verdict: 'PASS', stats: { significantImprovement: true } },
+    { verdict: 'PASS', stats: { significantRegression: true } },
+    { verdict: 'REGRESSION' },
+    { verdict: 'REFUSED' },
+  ];
+
+  it('is a gain or no-gain exactly when the install gate passes', () => {
+    for (const score of scores) {
+      const state = scoreState(score);
+      expect(['gain', 'no-gain'].includes(state)).toBe(passedGate(score));
+    }
+  });
+});

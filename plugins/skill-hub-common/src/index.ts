@@ -80,13 +80,17 @@ export type ScoreState =
 
 export function scoreState(score: EvalScore | undefined): ScoreState {
   if (!score) return 'unscored';
-  const verdict = (score.verdict ?? '').toUpperCase();
   // A pass the gate itself measured as significantly worse is a regression,
   // whatever the verdict string says.
-  if (verdict === 'REGRESSION' || score.stats?.significantRegression === true) {
+  if (
+    (score.verdict ?? '').toUpperCase() === 'REGRESSION' ||
+    score.stats?.significantRegression === true
+  ) {
     return 'regressed';
   }
-  if (verdict !== 'PASS') return 'failed';
+  // The same definition of a pass the install gate uses, so the badge and the
+  // button cannot disagree.
+  if (!passedGate(score)) return 'failed';
   return score.stats?.significantImprovement === true ? 'gain' : 'no-gain';
 }
 
