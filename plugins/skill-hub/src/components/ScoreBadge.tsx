@@ -148,16 +148,32 @@ export const ScoreBadge = ({
   const ci = score.stats;
   const interval =
     ci?.ciLow !== undefined && ci.ciHigh !== undefined
-      ? ` Mean change ${ci.meanDelta?.toFixed(4) ?? 'unrecorded'}, ${Math.round(
+      ? ` Mean change over the model alone ${
+          ci.meanDelta?.toFixed(4) ?? 'unrecorded'
+        }, ${Math.round(
           (ci.confidence ?? 0.95) * 100,
         )}% interval ${ci.ciLow.toFixed(4)} to ${ci.ciHigh.toFixed(4)}.`
       : '';
+
+  // What the badge states is the change over the model alone, not the
+  // candidate's own mean, which says nothing about whether the asset helped.
+  const signed = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(3)}`;
+  const gain =
+    state === 'gain' && ci?.meanDelta !== undefined
+      ? `${signed(ci.meanDelta)}${
+          ci.ciLow !== undefined && ci.ciHigh !== undefined
+            ? ` (CI ${ci.ciLow.toFixed(3)} to ${ci.ciHigh.toFixed(3)})`
+            : ''
+        }`
+      : undefined;
 
   // The number on the badge means nothing on its own, so what it measures
   // travels with it: in the tooltip for a pointer, and in the accessible name
   // for everyone a tooltip never reaches.
   const measured = headline
-    ? ` ${headline.name} ${headline.candidate} against a ${headline.baseline} baseline, recorded ${score.recorded ?? 'on an unknown date'}.`
+    ? ` ${headline.name} ${headline.candidate} against a ${
+        headline.baseline
+      } baseline, recorded ${score.recorded ?? 'on an unknown date'}.`
     : '';
   const explanation = `Eval gate ${verdict}: ${label}.${interval}${measured}`;
 
@@ -176,11 +192,7 @@ export const ScoreBadge = ({
       <span className={`${sized} ${style}`}>
         <span className={classes.visible} aria-hidden="true">
           {label}
-          {state === 'gain' && headline && (
-            <span className={classes.metric}>
-              {fmt(headline.candidate)}
-            </span>
-          )}
+          {gain && <span className={classes.metric}>{gain}</span>}
         </span>
         {/*
           The number on the badge means nothing on its own, and a tooltip
@@ -199,10 +211,6 @@ export const ScoreBadge = ({
     </span>
   );
 };
-
-/** A number as three places, or the text a hand-written score gave. */
-const fmt = (value: number | string) =>
-  typeof value === 'number' ? value.toFixed(3) : value;
 
 /** The first metric, which is the one the gate is named after. */
 function topMetric(score: EvalScore) {

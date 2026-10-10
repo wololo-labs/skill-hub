@@ -23,7 +23,13 @@ const SCORES: Record<string, EvalScore | undefined> = {
   gain: {
     verdict: 'PASS',
     measuredCommit: PINNED,
-    stats: { ...ci, ciLow: 0.02, ciHigh: 0.09, significantImprovement: true },
+    stats: {
+      ...ci,
+      meanDelta: 0.052,
+      ciLow: 0.021,
+      ciHigh: 0.09,
+      significantImprovement: true,
+    },
   },
   'no gain': {
     verdict: 'PASS',
@@ -82,7 +88,10 @@ describe('the four score states', () => {
         <InstallPanel asset={asset(SCORES.gain)} />
       </>,
     );
-    expect(await screen.findAllByText('measured gain')).not.toHaveLength(0);
+    // The badge shows the gain over the model alone, not the candidate's mean.
+    expect(
+      await screen.findAllByText('+0.052 (CI 0.021 to 0.090)'),
+    ).not.toHaveLength(0);
     expect(command()).toBeInTheDocument();
     expect(screen.queryByText(/No measured gain/)).not.toBeInTheDocument();
   });
