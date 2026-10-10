@@ -91,6 +91,16 @@ const useStyles = makeStyles(theme => ({
     fontSize: 12.5,
     lineHeight: 1.55,
   },
+  // A note, not a second warning box: it states what the score does not say
+  // and sits beside the dashed amber badge that says the same thing.
+  noGainNote: {
+    padding: theme.spacing(0.25, 0, 0.25, 1.5),
+    marginBottom: theme.spacing(2),
+    borderLeft: `3px dashed ${theme.palette.status.warning}`,
+    color: theme.palette.text.primary,
+    fontSize: 12.5,
+    lineHeight: 1.55,
+  },
   acknowledge: {
     display: 'flex',
     alignItems: 'center',
@@ -312,7 +322,7 @@ export const InstallPanel = ({ asset, stale = false }: InstallPanelProps) => {
 
       <Box>
         {passed && noGain && (
-          <div className={classes.stale} role="note">
+          <div className={classes.noGainNote} role="note">
             <p className={classes.staleText}>
               No measured gain over the model alone. This asset passed its gate,
               but the gate could not show it does better than the model without

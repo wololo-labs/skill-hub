@@ -216,3 +216,14 @@ describe('a score with no verdict', () => {
     expect(screen.queryByText(/^scored$/i)).not.toBeInTheDocument();
   });
 });
+
+describe('the two warnings on one panel', () => {
+  it('give the stale warning and the no-gain note different styles', async () => {
+    const score = { ...SCORES['no gain']!, measuredCommit: MEASURED };
+    wrap(<InstallPanel asset={asset(score)} stale />);
+    const note = await screen.findByRole('note');
+    const staleBox = screen.getByText(/measured against a different commit/)
+      .parentElement!;
+    expect(note.className).not.toBe(staleBox.className);
+  });
+});
