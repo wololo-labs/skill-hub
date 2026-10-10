@@ -12,7 +12,6 @@ import {
   ANNOTATION_INSTALL,
   ANNOTATION_REPO,
   ANNOTATION_SOURCE_LOCATION,
-  APM_ALL_TARGETS,
   EvalScore,
   HARNESSES,
   InstallCommands,
@@ -262,13 +261,9 @@ function packageHarnesses(
   apm: Record<string, unknown>,
   manifest: AgentAssetsManifest,
 ): string[] {
-  const raw = apm.targets ?? apm.target;
-  const declared = (Array.isArray(raw) ? raw : [raw]).filter(
-    (t): t is string => typeof t === 'string',
-  );
-  if (!declared.length) return manifest.harnesses;
+  const declared = declaredTargets(apm);
+  if (!declared) return manifest.harnesses;
 
-  const wanted = declared.flatMap(t => (t === 'all' ? APM_ALL_TARGETS : [t]));
   // A repository that wrote its own harnesses has limited what it supports,
   // so a pack declaring more does not widen that. One that left it out has
   // only taken the default, which is not a limit on a pack.
@@ -276,8 +271,41 @@ function packageHarnesses(
     ? manifest.harnesses
     : HARNESSES.map(h => h.id);
   return HARNESSES.map(h => h.id).filter(
-    id => wanted.includes(id) && allowed.includes(id),
+    id => declared.includes(id) && allowed.includes(id),
   );
+}
+
+/**
+ * The spellings APM accepts in an apm.yml target field that are not a
+ * canonical slug. Only `vscode` is one: `agents` and `agy` are accepted on the
+ * command line but rejected in a manifest.
+ */
+const MANIFEST_TARGET_ALIASES: Record<string, string> = { vscode: 'copilot' };
+
+/**
+ * The targets a package declares, read the way APM reads them
+ * (`apm_cli/core/apm_yml.py`, the same in 0.29.0 and 0.33.0), or undefined
+ * when it declares none and so does not restrict anything.
+ *
+ * Under `targets` a lone value is one target. Under the singular `target` a
+ * string may be comma separated. Tokens are trimmed and compared exactly: APM
+ * is case sensitive, so a spelling it would reject is not normalised into one
+ * it would accept. `all` folds to no restriction, which is what omitting the
+ * field means.
+ */
+function declaredTargets(apm: Record<string, unknown>): string[] | undefined {
+  const raw = apm.targets ?? apm.target;
+  if (raw === undefined || raw === null) return undefined;
+
+  let tokens: string[];
+  if (Array.isArray(raw)) {
+    tokens = raw.map(String);
+  } else {
+    tokens = apm.targets !== undefined ? [String(raw)] : String(raw).split(',');
+  }
+  tokens = tokens.map(t => t.trim()).filter(Boolean);
+  if (!tokens.length || tokens.includes('all')) return undefined;
+  return tokens.map(t => MANIFEST_TARGET_ALIASES[t] ?? t);
 }
 
 /**

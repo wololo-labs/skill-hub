@@ -330,13 +330,37 @@ publish:
       expect(readInstallCommands(system).cursor).toContain('--target cursor');
     });
 
-    it('expands all to the targets APM auto-detects, not the explicit-only ones', async () => {
+    it('treats all as no restriction, which is what APM does with it', async () => {
+      // APM folds `all` in apm.yml to the same behaviour as omitting the
+      // field (apm_cli/core/apm_yml.py, 0.29.0 and 0.33.0), so --target
+      // decides and nothing is excluded. Expanding it to a list would hide
+      // targets the pack does deploy to.
       const { system } = await pack('name: p\ntargets: all\n');
-      const offered = readHarnesses(system);
-      expect(offered).toContain('gemini');
-      expect(offered).toContain('kiro');
-      for (const explicitOnly of ['antigravity', 'hermes', 'agent-skills']) {
-        expect(offered).not.toContain(explicitOnly);
+      expect(readHarnesses(system)).toEqual(['claude', 'copilot', 'codex']);
+    });
+
+    it('reads vscode as copilot, because APM accepts it in apm.yml as that', async () => {
+      const { system } = await pack('name: p\ntargets: [vscode]\n');
+      expect(readHarnesses(system)).toEqual(['copilot']);
+    });
+
+    it('reads a comma separated list under the singular key, as APM does', async () => {
+      const { system } = await pack('name: p\ntarget: "claude, copilot"\n');
+      expect(readHarnesses(system)).toEqual(['claude', 'copilot']);
+    });
+
+    it('reads a lone value under targets as one target', async () => {
+      const { system } = await pack('name: p\ntargets: claude\n');
+      expect(readHarnesses(system)).toEqual(['claude']);
+    });
+
+    it('does not accept spellings APM rejects in apm.yml', async () => {
+      // APM compares targets case sensitively and only accepts `vscode`, not
+      // `agents` or `agy`, in a manifest. A pack that wrote them fails to
+      // install, so no command is offered for them.
+      for (const bad of ['Claude', 'agents', 'agy']) {
+        const { system } = await pack(`name: p\ntargets: [${bad}]\n`);
+        expect(readHarnesses(system)).toEqual([]);
       }
     });
 
