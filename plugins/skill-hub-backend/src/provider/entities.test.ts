@@ -272,12 +272,12 @@ publish:
   });
 
   describe('which harnesses a pack is offered for', () => {
-    const pack = async (apmYaml: string) => {
+    const pack = async (apmYaml: string, harnesses = '') => {
       const { entities } = await buildEntities({
         repo: REPO,
         commitSha: SHA,
         manifest: parseManifest(
-          'owner: team\npublish:\n  packages: packages/*/apm.yml\n  skills: packages/*/.apm/skills/*/SKILL.md\n',
+          `owner: team\n${harnesses}publish:\n  packages: packages/*/apm.yml\n  skills: packages/*/.apm/skills/*/SKILL.md\n`,
         ),
         ...repository({
           'packages/p/apm.yml': apmYaml,
@@ -305,6 +305,18 @@ publish:
       // A member installs as the pack, so it is offered what the pack is.
       expect(readHarnesses(skill)).toEqual(['claude', 'copilot']);
       expect(readInstallCommands(skill).codex).toBeUndefined();
+    });
+
+    it('never offers a target the repository manifest has narrowed away', async () => {
+      // An owner who writes harnesses: [claude] has said claude is all they
+      // support, so a pack declaring more does not widen it.
+      const narrowed = 'harnesses: [claude]\n';
+      const both = await pack('name: p\ntargets: [claude, copilot]\n', narrowed);
+      expect(readHarnesses(both.system)).toEqual(['claude']);
+      expect(readHarnesses(both.skill)).toEqual(['claude']);
+
+      const outside = await pack('name: p\ntargets: [cursor]\n', narrowed);
+      expect(readHarnesses(outside.system)).toEqual([]);
     });
 
     it('falls back to the repository manifest when the pack declares nothing', async () => {

@@ -40,6 +40,12 @@ export interface AgentAssetsManifest {
   system?: string;
   /** Harnesses these assets target. Defaults to all three. */
   harnesses: string[];
+  /**
+   * Whether the repository wrote `harnesses:` itself. A written list is a
+   * limit on everything the repository publishes; an omitted one is only the
+   * default for standalone assets and does not limit what a pack declares.
+   */
+  harnessesExplicit: boolean;
   /** Glob patterns per asset kind, relative to the repository root. */
   publish: Partial<Record<AssetKind, string[]>>;
 }
@@ -142,6 +148,7 @@ export function parseManifest(raw: string): AgentAssetsManifest {
     owner: root.owner,
     system: root.system,
     harnesses,
+    harnessesExplicit: Boolean(root.harnesses),
     publish,
   };
 }

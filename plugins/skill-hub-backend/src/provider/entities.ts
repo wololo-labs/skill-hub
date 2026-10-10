@@ -260,16 +260,24 @@ function readPackageScore(
  */
 function packageHarnesses(
   apm: Record<string, unknown>,
-  fallback: string[],
+  manifest: AgentAssetsManifest,
 ): string[] {
   const raw = apm.targets ?? apm.target;
   const declared = (Array.isArray(raw) ? raw : [raw]).filter(
     (t): t is string => typeof t === 'string',
   );
-  if (!declared.length) return fallback;
+  if (!declared.length) return manifest.harnesses;
 
   const wanted = declared.flatMap(t => (t === 'all' ? APM_ALL_TARGETS : [t]));
-  return HARNESSES.map(h => h.id).filter(id => wanted.includes(id));
+  // A repository that wrote its own harnesses has limited what it supports,
+  // so a pack declaring more does not widen that. One that left it out has
+  // only taken the default, which is not a limit on a pack.
+  const allowed = manifest.harnessesExplicit
+    ? manifest.harnesses
+    : HARNESSES.map(h => h.id);
+  return HARNESSES.map(h => h.id).filter(
+    id => wanted.includes(id) && allowed.includes(id),
+  );
 }
 
 /**
@@ -380,7 +388,7 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
       name: entityName(name),
       version: typeof apm.version === 'string' ? apm.version : undefined,
       score,
-      harnesses: packageHarnesses(apm, manifest.harnesses),
+      harnesses: packageHarnesses(apm, manifest),
       mcp,
     };
     packages.push(info);
