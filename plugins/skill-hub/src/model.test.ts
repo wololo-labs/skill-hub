@@ -164,7 +164,11 @@ describe('the four score states in the browse model', () => {
     entity({ name: 'c-nogain', score: { verdict: 'PASS' } }),
     entity({
       name: 'd-gain',
-      score: { verdict: 'PASS', stats: { significantImprovement: true } },
+      score: {
+        verdict: 'PASS',
+        origin: 'gate-report',
+        stats: { significantImprovement: true },
+      },
     }),
   ].map(toAsset);
 
@@ -207,7 +211,11 @@ describe('countByState', () => {
       entity({ name: 'd', score: { verdict: 'PASS' } }),
       entity({
         name: 'e',
-        score: { verdict: 'PASS', stats: { significantImprovement: true } },
+        score: {
+        verdict: 'PASS',
+        origin: 'gate-report',
+        stats: { significantImprovement: true },
+      },
       }),
     ].map(toAsset);
     const counts = countByState(everything);

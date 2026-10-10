@@ -46,10 +46,28 @@ export interface EvalScore {
   /** The commit the score was measured at, when the publisher records one. */
   measuredCommit?: string;
   /**
+   * Where the score came from. The provider sets it, and only a gate report
+   * can show a gain: a hand-written file can say a pass, never an improvement.
+   */
+  origin?: ScoreOrigin;
+  /**
    * The gate's aggregate statistics over every case. Absent when the report
    * carries none, which reads as no demonstrated gain, never as a gain.
    */
   stats?: EvalStats;
+}
+
+export type ScoreOrigin = 'gate-report' | 'eval-score' | 'catalogue';
+
+const ORIGIN_WORDS: Record<ScoreOrigin, string> = {
+  'gate-report': 'a gate report',
+  'eval-score': 'an eval-score.json, not a gate run',
+  catalogue: 'a catalogue file, not a gate run',
+};
+
+/** Where a score came from, in words, saying when it is not a gate run. */
+export function describeOrigin(origin: ScoreOrigin | undefined): string {
+  return origin ? ORIGIN_WORDS[origin] : 'an unknown source, not a gate run';
 }
 
 /** The part of the gate report's `stats` block the catalogue states. */
@@ -91,7 +109,12 @@ export function scoreState(score: EvalScore | undefined): ScoreState {
   // The same definition of a pass the install gate uses, so the badge and the
   // button cannot disagree.
   if (!passedGate(score)) return 'failed';
-  return score.stats?.significantImprovement === true ? 'gain' : 'no-gain';
+  // Only a gate run can show an improvement over the model alone. A score from
+  // anywhere else can say it passed, and is capped at no measured gain.
+  return score.stats?.significantImprovement === true &&
+    score.origin === 'gate-report'
+    ? 'gain'
+    : 'no-gain';
 }
 
 /**
@@ -229,8 +252,14 @@ function sanitizeScore(raw: Record<string, unknown>): EvalScore {
     }).filter(([, v]) => v !== undefined),
   ) as EvalStats;
   const commit = commitOf(raw.measuredCommit);
+  const origin = ['gate-report', 'eval-score', 'catalogue'].includes(
+    raw.origin as string,
+  )
+    ? (raw.origin as ScoreOrigin)
+    : undefined;
   return {
     verdict: text(raw.verdict),
+    ...(origin ? { origin } : {}),
     recorded: text(raw.recorded),
     source: text(raw.source),
     sourceVisibility: text(raw.sourceVisibility),

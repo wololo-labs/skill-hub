@@ -214,6 +214,7 @@ function readGateReport(reportJson: string): EvalScore | undefined {
     // `pass` is the only verdict that opens the install gate, and every other
     // one the gate can return (`regression`, `refused`) is carried through as
     // itself rather than flattened to a failure it might not be.
+    origin: 'gate-report' as const,
     verdict: report.verdict.toUpperCase(),
     recorded: text(report.recorded),
     source: text(report.source),
@@ -246,7 +247,8 @@ function readPackageScore(
         const entity = doc.toJS() as Entity | null;
         const raw = entity?.metadata?.annotations?.[ANNOTATION_EVAL_SCORE];
         if (!raw) continue;
-        const score = JSON.parse(raw) as EvalScore;
+        // Stamped here, whatever the file says about itself.
+        const score = { ...(JSON.parse(raw) as EvalScore), origin: 'catalogue' as const };
         const location =
           entity?.metadata?.annotations?.[ANNOTATION_SOURCE_LOCATION];
         const measured = /\/(?:tree|blob)\/([^/]+)\//.exec(
@@ -263,9 +265,10 @@ function readPackageScore(
       const parsed = JSON.parse(evalScoreJson) as EvalScore & {
         commit?: string;
       };
+      const stamped = { ...parsed, origin: 'eval-score' as const };
       return parsed.commit
-        ? { ...parsed, measuredCommit: parsed.commit }
-        : parsed;
+        ? { ...stamped, measuredCommit: parsed.commit }
+        : stamped;
     } catch {
       return undefined;
     }

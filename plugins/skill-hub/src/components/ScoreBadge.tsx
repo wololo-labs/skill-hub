@@ -2,6 +2,7 @@ import { Tooltip, makeStyles } from '@material-ui/core';
 import {
   EvalScore,
   describeChange,
+  describeOrigin,
   describeVerdict,
   isMeasuredWorse,
   isScoreStale,
@@ -161,6 +162,12 @@ export const ScoreBadge = ({
   // The number on the badge means nothing on its own, so what it measures
   // travels with it: in the tooltip for a pointer, and in the accessible name
   // for everyone a tooltip never reaches.
+  // Where it came from, when that is not a gate run: a hand-written score can
+  // say a pass but never a gain, and the reader is told which this is.
+  const source =
+    score.origin === 'gate-report'
+      ? ''
+      : ` Score from ${describeOrigin(score.origin)}.`;
   const measured = headline
     ? ` ${headline.name} ${headline.candidate} against a ${
         headline.baseline
@@ -168,9 +175,9 @@ export const ScoreBadge = ({
     : '';
   let explanation = `Eval gate report has no verdict, so it counts as a failed gate.${measured}`;
   if (isMeasuredWorse(score)) {
-    explanation = `Eval gate ${verdict}: it passed its gate, but measured significantly worse than the model alone.${interval}${measured}`;
+    explanation = `Eval gate ${verdict}: it passed its gate, but measured significantly worse than the model alone.${interval}${measured}${source}`;
   } else if (verdict) {
-    explanation = `Eval gate ${verdict}: ${label}.${interval}${measured}`;
+    explanation = `Eval gate ${verdict}: ${label}.${interval}${measured}${source}`;
   }
 
   // The score is never hidden for being old, only dated: both commits sit

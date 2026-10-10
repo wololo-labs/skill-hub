@@ -22,6 +22,7 @@ const ci = {
 const SCORES: Record<string, EvalScore | undefined> = {
   gain: {
     verdict: 'PASS',
+    origin: 'gate-report',
     measuredCommit: PINNED,
     stats: {
       ...ci,
@@ -254,5 +255,29 @@ describe('a blocked asset whose backend published no command', () => {
     wrap(<InstallPanel asset={noCommand(score)} />);
     expect(await screen.findByText(text)).toBeInTheDocument();
     expect(screen.queryByText(/publishes no install command/)).toBeNull();
+  });
+});
+
+describe('a gain claimed by something that is not a gate run', () => {
+  it('shows no measured gain and says where the score came from', async () => {
+    const claimed: EvalScore = {
+      verdict: 'PASS',
+      origin: 'eval-score',
+      measuredCommit: PINNED,
+      stats: { ...ci, meanDelta: 0.05, ciLow: 0.02, ciHigh: 0.08, significantImprovement: true },
+    };
+    wrap(
+      <>
+        <ScoreBadge score={claimed} pinnedCommit={PINNED} />
+        <InstallPanel asset={asset(claimed)} />
+      </>,
+    );
+    expect(
+      await screen.findAllByText('no measured gain over the model alone'),
+    ).not.toHaveLength(0);
+    expect(screen.queryByText('measured gain')).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/Score from an eval-score\.json, not a gate run/),
+    ).toBeInTheDocument();
   });
 });

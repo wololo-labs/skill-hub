@@ -26,6 +26,7 @@ import useAsyncRetry from 'react-use/esm/useAsyncRetry';
 import useAsync from 'react-use/esm/useAsync';
 import {
   describeChange,
+  describeOrigin,
   describeVerdict,
   isScoreStale,
 } from '@internal/plugin-skill-hub-common';
@@ -380,6 +381,10 @@ export const AssetPage = () => {
                   <Table size="small">
                     <TableBody>
                       <Row label="Verdict" value={describeVerdict(score)} />
+                      <Row
+                        label="Score from"
+                        value={describeOrigin(score.origin)}
+                      />
                       {score.recorded && (
                         <Row label="Recorded" value={score.recorded} />
                       )}

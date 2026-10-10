@@ -266,6 +266,59 @@ publish:
     expect(isInstallable(entities[0])).toBe(false);
   });
 
+  describe('only a gate report can show a gain', () => {
+    const stateOf = async (files: Record<string, string>) => {
+      const { entities } = await buildEntities({
+        repo: REPO,
+        commitSha: SHA,
+        manifest: parseManifest(
+          'owner: team\npublish:\n  packages: packages/*/apm.yml\n',
+        ),
+        ...repository({
+          'packages/p/apm.yml': 'name: p\nversion: 0.1.0\n',
+          ...files,
+        }),
+      });
+      const score = readEvalScore(entities[0])!;
+      return { state: scoreState(score), origin: score.origin };
+    };
+    const claim = { verdict: 'PASS', stats: { significant_improvement: true } };
+
+    it('reads a gain from a gate report', async () => {
+      expect(
+        await stateOf({
+          'packages/p/eval-gate-report.json': JSON.stringify({
+            verdict: 'pass',
+            signals: [],
+            stats: { significant_improvement: true },
+          }),
+        }),
+      ).toEqual({ state: 'gain', origin: 'gate-report' });
+    });
+
+    it('caps a gain claimed in a hand-written eval-score.json at no gain', async () => {
+      expect(
+        await stateOf({ 'packages/p/eval-score.json': JSON.stringify(claim) }),
+      ).toEqual({ state: 'no-gain', origin: 'eval-score' });
+    });
+
+    it('caps a gain claimed in a catalogue file at no gain, whatever origin it writes for itself', async () => {
+      const catalogInfo = [
+        'apiVersion: backstage.io/v1alpha1',
+        'kind: System',
+        'metadata:',
+        '  name: p',
+        '  annotations:',
+        `    ${ANNOTATION_EVAL_SCORE}: '${JSON.stringify({ ...claim, origin: 'gate-report' })}'`,
+        'spec:',
+        '  owner: user:x',
+      ].join('\n');
+      expect(
+        await stateOf({ 'packages/p/catalog-info.yaml': catalogInfo }),
+      ).toEqual({ state: 'no-gain', origin: 'catalogue' });
+    });
+  });
+
   describe('which scores get an install command at all', () => {
     const commandsFor = async (report?: object) => {
       const { entities } = await buildEntities({

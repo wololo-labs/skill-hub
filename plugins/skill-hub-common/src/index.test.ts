@@ -1,6 +1,7 @@
 import {
   EvalScore,
   describeChange,
+  describeOrigin,
   describeVerdict,
   isScoreStale,
   passedGate,
@@ -18,7 +19,9 @@ const stats = (significantImprovement: boolean) => ({
 
 describe('scoreState', () => {
   it('is a gain only for a pass with a significant improvement', () => {
-    expect(scoreState({ verdict: 'PASS', stats: stats(true) })).toBe('gain');
+    expect(
+      scoreState({ verdict: 'PASS', origin: 'gate-report', stats: stats(true) }),
+    ).toBe('gain');
   });
 
   it('reads a pass that is measurably worse as regressed, and not installable', () => {
@@ -28,6 +31,18 @@ describe('scoreState', () => {
     };
     expect(scoreState(score)).toBe('regressed');
     expect(passedGate(score)).toBe(false);
+  });
+
+  it.each([
+    ['a hand-written eval-score.json', 'eval-score'],
+    ['a catalogue file', 'catalogue'],
+    ['a score of unknown origin', undefined],
+  ] as const)('never reads a gain claimed by %s as one', (_, origin) => {
+    // Only a gate run can show an improvement. Anything else can say it passed,
+    // not that it beats the model alone.
+    expect(
+      scoreState({ verdict: 'PASS', origin, stats: stats(true) }),
+    ).toBe('no-gain');
   });
 
   it('is no demonstrated gain for a pass without one', () => {
@@ -152,7 +167,7 @@ describe('one definition of a passed gate', () => {
     undefined,
     {},
     { verdict: 'pass' },
-    { verdict: 'PASS', stats: { significantImprovement: true } },
+    { verdict: 'PASS', origin: 'gate-report', stats: { significantImprovement: true } },
     { verdict: 'PASS', stats: { significantRegression: true } },
     { verdict: 'REGRESSION' },
     { verdict: 'REFUSED' },
@@ -194,6 +209,7 @@ describe('a score whose statistics are written in snake case', () => {
     const snake = readEvalScore(
       entityWith({
         verdict: 'PASS',
+        origin: 'gate-report',
         stats: {
           mean_delta: 0.05,
           ci_low: 0.02,
@@ -295,5 +311,32 @@ describe('a statistic written in both spellings', () => {
     expect(score.stats?.significantRegression).toBe(true);
     expect(score.stats?.ciLow).toBe(0.1);
     expect(scoreState(score)).toBe('regressed');
+  });
+});
+
+describe('where a score came from', () => {
+  it('is kept when it is one of the known origins and dropped otherwise', () => {
+    const read = (origin: unknown) =>
+      readEvalScore({
+        apiVersion: 'backstage.io/v1alpha1',
+        kind: 'System',
+        metadata: {
+          name: 'x',
+          annotations: {
+            'wololo.dev/eval-score': JSON.stringify({ verdict: 'PASS', origin }),
+          },
+        },
+      } as any)!.origin;
+    expect(read('gate-report')).toBe('gate-report');
+    expect(read('eval-score')).toBe('eval-score');
+    expect(read('catalogue')).toBe('catalogue');
+    expect(read('made-up')).toBeUndefined();
+  });
+
+  it('is labelled in words, with the ones that are not a gate run saying so', () => {
+    expect(describeOrigin('gate-report')).toBe('a gate report');
+    expect(describeOrigin('eval-score')).toBe('an eval-score.json, not a gate run');
+    expect(describeOrigin('catalogue')).toBe('a catalogue file, not a gate run');
+    expect(describeOrigin(undefined)).toBe('an unknown source, not a gate run');
   });
 });
