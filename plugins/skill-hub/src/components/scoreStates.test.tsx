@@ -242,3 +242,17 @@ describe('the two warnings on one panel', () => {
     expect(note.className).not.toBe(staleBox.className);
   });
 });
+
+describe('a blocked asset whose backend published no command', () => {
+  const noCommand = (score?: EvalScore): Asset =>
+    ({ ...asset(score), install: {} }) as Asset;
+
+  it.each([
+    ['regressed', SCORES.regressed, /Install is blocked: the asset regressed/],
+    ['unscored', undefined, /Install is blocked until this asset has a score/],
+  ])('says it is %s, not that no command is published', async (_, score, text) => {
+    wrap(<InstallPanel asset={noCommand(score)} />);
+    expect(await screen.findByText(text)).toBeInTheDocument();
+    expect(screen.queryByText(/publishes no install command/)).toBeNull();
+  });
+});

@@ -14,6 +14,7 @@ import {
   ANNOTATION_SOURCE_LOCATION,
   EvalScore,
   InstallCommands,
+  passedGate,
 } from '@internal/plugin-skill-hub-common';
 import { RepoRef, TreeEntry } from '../github/GithubAssetReader';
 import {
@@ -103,7 +104,12 @@ function installCommands(
   commitSha: string,
   harnesses: string[],
   target: { kind: 'package'; dir: string } | { kind: 'unit'; path: string },
+  score: EvalScore | undefined,
 ): InstallCommands {
+  // The install gate is enforced here as well as in the UI: an asset with no
+  // passing score has no command to copy, so the block is not only a button
+  // that was left off a page.
+  if (!passedGate(score)) return {};
   const subject = target.kind === 'package' ? target.dir : target.path;
   if (!shellSafe(repo.owner, repo.repo, subject) || !/^[0-9a-f]{40}$/.test(commitSha)) {
     return {};
@@ -396,10 +402,13 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
             : {}),
           ...(score ? { [ANNOTATION_EVAL_SCORE]: JSON.stringify(score) } : {}),
           [ANNOTATION_INSTALL]: JSON.stringify(
-            installCommands(repo, commitSha, manifest.harnesses, {
-              kind: 'package',
-              dir,
-            }),
+            installCommands(
+              repo,
+              commitSha,
+              manifest.harnesses,
+              { kind: 'package', dir },
+              score,
+            ),
           ),
         },
         links: sourceLink(dir, 'tree'),
@@ -431,10 +440,13 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
               : {}),
             [ANNOTATION_EVAL_SCORE_REF]: `system:${namespace}/${info.name}`,
             [ANNOTATION_INSTALL]: JSON.stringify(
-              installCommands(repo, commitSha, manifest.harnesses, {
-                kind: 'package',
-                dir,
-              }),
+              installCommands(
+                repo,
+                commitSha,
+                manifest.harnesses,
+                { kind: 'package', dir },
+                score,
+              ),
             ),
           },
           links: sourceLink(path, 'blob'),
@@ -514,6 +526,7 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
               pkg
                 ? { kind: 'package', dir: pkg.dir }
                 : { kind: 'unit', path },
+              pkg?.score,
             ),
           ),
         },
@@ -575,6 +588,7 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
                 pkg
                   ? { kind: 'package', dir: pkg.dir }
                   : { kind: 'unit', path: assetPath },
+                pkg?.score,
               ),
             ),
           },

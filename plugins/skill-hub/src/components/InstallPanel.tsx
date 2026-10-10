@@ -224,7 +224,11 @@ export const InstallPanel = ({ asset, stale = false }: InstallPanelProps) => {
   const [acknowledged, setAcknowledged] = useState(false);
   const radios = useRef<Array<HTMLButtonElement | null>>([]);
 
-  if (!offered.length) {
+  const passed = passedGate(asset.score);
+  // A blocked asset has no command on the backend either, so an empty command
+  // list only means "no command" for one that passed; for the others the score
+  // is the reason and is what gets said.
+  if (passed && !offered.length) {
     return (
       <InfoCard title="Install">
         <Typography className={classes.body}>
@@ -236,13 +240,12 @@ export const InstallPanel = ({ asset, stale = false }: InstallPanelProps) => {
   }
 
   const index = Math.min(selected, offered.length - 1);
-  const harness = offered[index];
-  const command = asset.install[harness.id]!;
+  const harness = offered[index] as (typeof offered)[number] | undefined;
+  const command = harness ? asset.install[harness.id] : undefined;
   // Presence of a score is not the gate; a passing verdict is. A report that
   // says the asset failed blocks the command exactly as hard as no report at
   // all, and says so in different words, because the two are not the same
   // problem for whoever is reading.
-  const passed = passedGate(asset.score);
   const state = scoreState(asset.score);
   const installable = passed && (!stale || acknowledged);
   const message = blocked(state, passed, isMeasuredWorse(asset.score));
@@ -339,7 +342,7 @@ export const InstallPanel = ({ asset, stale = false }: InstallPanelProps) => {
             </p>
           </div>
         )}
-        {installable ? (
+        {installable && harness && command ? (
           <>
             <div className={classes.commandRow}>
               <div className={classes.commandScroll}>
