@@ -1,4 +1,11 @@
-import { EvalScore, isScoreStale, passedGate, readEvalScore, scoreState } from './index';
+import {
+  EvalScore,
+  describeChange,
+  isScoreStale,
+  passedGate,
+  readEvalScore,
+  scoreState,
+} from './index';
 
 const stats = (significantImprovement: boolean) => ({
   meanDelta: 0.0003,
@@ -107,5 +114,24 @@ describe('readEvalScore on a legacy or hand-written score', () => {
   it('never throws when asked whether a hand-written score is stale', () => {
     const score = readEvalScore(entityWith({ verdict: 'PASS', measuredCommit: 1234567 }));
     expect(() => isScoreStale(score, 'abc1234')).not.toThrow();
+  });
+});
+
+describe('describeChange', () => {
+  it('states the change with its interval', () => {
+    expect(
+      describeChange({ meanDelta: 0.052, ciLow: 0.021, ciHigh: 0.084 }),
+    ).toBe('0.0520 (0.0210 to 0.0840)');
+  });
+
+  it('says unrecorded when the mean is missing, never a blank', () => {
+    expect(describeChange({ ciLow: 0.021, ciHigh: 0.084 })).toBe(
+      'unrecorded (0.0210 to 0.0840)',
+    );
+  });
+
+  it('has nothing to say without an interval', () => {
+    expect(describeChange({ meanDelta: 0.1 })).toBeUndefined();
+    expect(describeChange(undefined)).toBeUndefined();
   });
 });

@@ -91,6 +91,16 @@ export function scoreState(score: EvalScore | undefined): ScoreState {
 }
 
 /**
+ * The change over the model alone with its interval, for the places that
+ * spell it out. A missing mean is said to be unrecorded, never left blank.
+ */
+export function describeChange(stats: EvalStats | undefined): string | undefined {
+  if (stats?.ciLow === undefined || stats.ciHigh === undefined) return undefined;
+  const mean = stats.meanDelta?.toFixed(4) ?? 'unrecorded';
+  return `${mean} (${stats.ciLow.toFixed(4)} to ${stats.ciHigh.toFixed(4)})`;
+}
+
+/**
  * Whether the score was measured at a different commit from the one the asset
  * is pinned to. Unknown on either side is not stale: there is nothing to
  * compare, and the score is shown either way.

@@ -24,7 +24,7 @@ import { useRouteRef } from '@backstage/frontend-plugin-api';
 import { catalogApiRef } from '@backstage/plugin-catalog-react';
 import useAsyncRetry from 'react-use/esm/useAsyncRetry';
 import useAsync from 'react-use/esm/useAsync';
-import { isScoreStale } from '@internal/plugin-skill-hub-common';
+import { describeChange, isScoreStale } from '@internal/plugin-skill-hub-common';
 import { toAsset } from '../model';
 import { skillHubApiRef } from '../api';
 import { rootRouteRef } from '../plugin';
@@ -379,21 +379,16 @@ export const AssetPage = () => {
                       {score.recorded && (
                         <Row label="Recorded" value={score.recorded} />
                       )}
-                      {score.stats?.ciLow !== undefined &&
-                        score.stats.ciHigh !== undefined && (
-                          <Row
-                            label={`Change vs model alone (${Math.round(
-                              (score.stats.confidence ?? 0.95) * 100,
-                            )}% interval)`}
-                            value={
-                              <span className={classes.mono}>
-                                {score.stats.meanDelta?.toFixed(4)} (
-                                {score.stats.ciLow.toFixed(4)} to{' '}
-                                {score.stats.ciHigh.toFixed(4)})
-                              </span>
-                            }
-                          />
-                        )}
+                      {describeChange(score.stats) && (
+                        <Row
+                          label={`Change vs model alone (${Math.round((score.stats?.confidence ?? 0.95) * 100)}% interval)`}
+                          value={
+                            <span className={classes.mono}>
+                              {describeChange(score.stats)}
+                            </span>
+                          }
+                        />
+                      )}
                       {score.measuredCommit && (
                         <Row
                           label="Measured at"
