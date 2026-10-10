@@ -201,20 +201,30 @@ function sanitizeScore(raw: Record<string, unknown>): EvalScore {
     string,
     unknown
   >;
-  const either = (camel: string, snake: string) => s[camel] ?? s[snake];
+  // The first spelling that holds a value of the right type, so a wrong-typed
+  // camelCase value never hides a valid snake_case one.
+  const first = <T>(
+    parse: (value: unknown) => T | undefined,
+    camel: string,
+    snake: string,
+  ): T | undefined => parse(s[camel]) ?? parse(s[snake]);
   const flag = (value: unknown) =>
     typeof value === 'boolean' ? value : undefined;
   const stats = Object.fromEntries(
     Object.entries({
-      meanDelta: finite(either('meanDelta', 'mean_delta')),
-      ciLow: finite(either('ciLow', 'ci_low')),
-      ciHigh: finite(either('ciHigh', 'ci_high')),
+      meanDelta: first(finite, 'meanDelta', 'mean_delta'),
+      ciLow: first(finite, 'ciLow', 'ci_low'),
+      ciHigh: first(finite, 'ciHigh', 'ci_high'),
       confidence: finite(s.confidence),
-      significantImprovement: flag(
-        either('significantImprovement', 'significant_improvement'),
+      significantImprovement: first(
+        flag,
+        'significantImprovement',
+        'significant_improvement',
       ),
-      significantRegression: flag(
-        either('significantRegression', 'significant_regression'),
+      significantRegression: first(
+        flag,
+        'significantRegression',
+        'significant_regression',
       ),
     }).filter(([, v]) => v !== undefined),
   ) as EvalStats;

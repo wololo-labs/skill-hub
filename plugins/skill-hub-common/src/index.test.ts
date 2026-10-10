@@ -269,3 +269,31 @@ describe('describeVerdict', () => {
     expect(describeVerdict({ verdict: 'pass' })).toBe('PASS');
   });
 });
+
+describe('a statistic written in both spellings', () => {
+  const readStats = (written: unknown) =>
+    readEvalScore({
+      apiVersion: 'backstage.io/v1alpha1',
+      kind: 'System',
+      metadata: {
+        name: 'x',
+        annotations: {
+          'wololo.dev/eval-score': JSON.stringify({ verdict: 'PASS', stats: written }),
+        },
+      },
+    } as any)!;
+
+  it('takes the first value that is the right type, not the first one present', () => {
+    // A wrong-typed camelCase value must not hide a valid snake_case one, or a
+    // measurably worse asset loses its regression.
+    const score = readStats({
+      significantRegression: 'yes',
+      significant_regression: true,
+      ciLow: 'low',
+      ci_low: 0.1,
+    });
+    expect(score.stats?.significantRegression).toBe(true);
+    expect(score.stats?.ciLow).toBe(0.1);
+    expect(scoreState(score)).toBe('regressed');
+  });
+});
