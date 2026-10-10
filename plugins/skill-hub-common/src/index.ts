@@ -104,6 +104,9 @@ export function describeChange(stats: EvalStats | undefined): string | undefined
   return `${mean} (${stats.ciLow.toFixed(4)} to ${stats.ciHigh.toFixed(4)})`;
 }
 
+/** A commit as git abbreviates one: 7 to 40 hex digits, lower cased. */
+const SHORTEST_COMMIT = 7;
+
 /**
  * Whether the score was measured at a different commit from the one the asset
  * is pinned to. Unknown on either side is not stale: there is nothing to
@@ -113,11 +116,15 @@ export function isScoreStale(
   score: EvalScore | undefined,
   pinnedCommit: string | undefined,
 ): boolean {
-  const measured = score?.measuredCommit;
-  if (!measured || !pinnedCommit) return false;
-  return (
-    !pinnedCommit.startsWith(measured) && !measured.startsWith(pinnedCommit)
-  );
+  const measured = score?.measuredCommit?.toLowerCase();
+  const pinned = pinnedCommit?.toLowerCase();
+  // Too short to be a commit on either side is nothing to compare, not a
+  // difference: a one character prefix would match or mismatch by luck.
+  if (!measured || !pinned) return false;
+  if (measured.length < SHORTEST_COMMIT || pinned.length < SHORTEST_COMMIT) {
+    return false;
+  }
+  return !pinned.startsWith(measured) && !measured.startsWith(pinned);
 }
 
 /** Install command per harness, keyed by harness id. */
@@ -132,6 +139,13 @@ const text = (value: unknown) =>
   typeof value === 'string' && value ? value : undefined;
 const finite = (value: unknown) =>
   typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+const commitOf = (value: unknown): string | undefined => {
+  const candidate = typeof value === 'number' ? String(value) : value;
+  return typeof candidate === 'string' &&
+    /^[0-9a-f]{7,40}$/i.test(candidate.trim())
+    ? candidate.trim().toLowerCase()
+    : undefined;
+};
 const shown = (value: unknown) =>
   finite(value) ?? (typeof value === 'string' ? value : undefined);
 
@@ -176,10 +190,7 @@ function sanitizeScore(raw: Record<string, unknown>): EvalScore {
       ),
     }).filter(([, v]) => v !== undefined),
   ) as EvalStats;
-  const commit =
-    typeof raw.measuredCommit === 'number'
-      ? String(raw.measuredCommit)
-      : text(raw.measuredCommit);
+  const commit = commitOf(raw.measuredCommit);
   return {
     verdict: text(raw.verdict),
     recorded: text(raw.recorded),

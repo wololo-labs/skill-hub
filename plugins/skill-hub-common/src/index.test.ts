@@ -208,3 +208,34 @@ describe('a score whose statistics are written in snake case', () => {
     expect(scoreState(snake)).toBe('gain');
   });
 });
+
+describe('measuredCommit', () => {
+  const read = (measuredCommit: unknown) =>
+    readEvalScore({
+      apiVersion: 'backstage.io/v1alpha1',
+      kind: 'System',
+      metadata: {
+        name: 'x',
+        annotations: {
+          'wololo.dev/eval-score': JSON.stringify({ verdict: 'PASS', measuredCommit }),
+        },
+      },
+    } as any)!;
+
+  it('keeps a real commit, lower cased, and drops anything that is not one', () => {
+    expect(read('ABCDEF1').measuredCommit).toBe('abcdef1');
+    expect(read(1234567).measuredCommit).toBe('1234567');
+    for (const bad of ['not-a-sha', 'xyz1234', 'a', 'abc12', 'f'.repeat(41), {}]) {
+      expect(read(bad).measuredCommit).toBeUndefined();
+    }
+  });
+
+  it('compares without regard to case', () => {
+    expect(isScoreStale(read('ABCDEF1'), `abcdef1${'0'.repeat(33)}`)).toBe(false);
+    expect(isScoreStale(read('abcdef1'), `ABCDEF1${'0'.repeat(33)}`)).toBe(false);
+  });
+
+  it('does not call a score stale on a pinned commit too short to compare', () => {
+    expect(isScoreStale(read('abcdef1'), 'a')).toBe(false);
+  });
+});
