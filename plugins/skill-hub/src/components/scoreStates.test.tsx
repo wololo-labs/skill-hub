@@ -3,7 +3,7 @@ import { ReactNode } from 'react';
 import { render, screen } from '@testing-library/react';
 import { ThemeProvider, createTheme } from '@material-ui/core';
 import { TestApiProvider, wrapInTestApp } from '@backstage/test-utils';
-import { EvalScore } from '@internal/plugin-skill-hub-common';
+import { EvalScore, readEvalScore } from '@internal/plugin-skill-hub-common';
 import { Asset } from '../model';
 import { skillHubApiRef } from '../api';
 import { InstallPanel } from './InstallPanel';
@@ -157,5 +157,29 @@ describe('staleness', () => {
     const score = { ...SCORES.regressed!, measuredCommit: MEASURED };
     wrap(<ScoreBadge score={score} pinnedCommit={PINNED} />);
     expect(await screen.findByText(/stale: scored at/)).toBeInTheDocument();
+  });
+});
+
+describe('a legacy score with values of the wrong type', () => {
+  it('renders as text and does not take the list down', async () => {
+    const entity = {
+      apiVersion: 'backstage.io/v1alpha1',
+      kind: 'System',
+      metadata: {
+        name: 'legacy',
+        annotations: {
+          'wololo.dev/eval-score': JSON.stringify({
+            verdict: 'PASS',
+            measuredCommit: 1234567,
+            metrics: { qe: { candidate: 'n/a', baseline: '0.4' } },
+            stats: { ciLow: 'low', ciHigh: 'high', meanDelta: 'x' },
+          }),
+        },
+      },
+    } as any;
+    wrap(<ScoreBadge score={readEvalScore(entity)} pinnedCommit={PINNED} />);
+    expect(
+      await screen.findAllByText('no measured gain over the model alone'),
+    ).not.toHaveLength(0);
   });
 });

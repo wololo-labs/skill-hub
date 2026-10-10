@@ -28,8 +28,9 @@ export type HarnessId = (typeof HARNESSES)[number]['id'];
 
 /** One metric from an eval gate report: candidate against its baseline. */
 export interface EvalMetric {
-  candidate: number;
-  baseline: number;
+  /** A number as the gate wrote it, or the text a hand-written score gave. */
+  candidate: number | string;
+  baseline: number | string;
 }
 
 /**
@@ -109,12 +110,75 @@ function annotation(entity: Entity, key: string): string | undefined {
   return value === '' ? undefined : value;
 }
 
+const text = (value: unknown) =>
+  typeof value === 'string' && value ? value : undefined;
+const finite = (value: unknown) =>
+  typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+const shown = (value: unknown) =>
+  typeof value === 'number' && Number.isFinite(value)
+    ? value
+    : typeof value === 'string'
+      ? value
+      : undefined;
+
+/**
+ * A score is read from an annotation that a publisher, a legacy
+ * `eval-score.json` or a hand-written catalogue file may have filled with
+ * anything. Every field is checked here, once, so no surface has to guard.
+ * A value that is text where a number belongs is kept as text, which is
+ * shown as it was written rather than crashing the list.
+ */
+function sanitizeScore(raw: Record<string, unknown>): EvalScore {
+  const metrics: Record<string, EvalMetric> = {};
+  if (typeof raw.metrics === 'object' && raw.metrics !== null) {
+    for (const [name, m] of Object.entries(raw.metrics)) {
+      const candidate = shown((m as any)?.candidate);
+      const baseline = shown((m as any)?.baseline);
+      if (candidate !== undefined && baseline !== undefined) {
+        metrics[name] = { candidate, baseline };
+      }
+    }
+  }
+  const s = (typeof raw.stats === 'object' && raw.stats) || {};
+  const stats = Object.fromEntries(
+    Object.entries({
+      meanDelta: finite((s as any).meanDelta),
+      ciLow: finite((s as any).ciLow),
+      ciHigh: finite((s as any).ciHigh),
+      confidence: finite((s as any).confidence),
+      significantImprovement:
+        typeof (s as any).significantImprovement === 'boolean'
+          ? (s as any).significantImprovement
+          : undefined,
+      significantRegression:
+        typeof (s as any).significantRegression === 'boolean'
+          ? (s as any).significantRegression
+          : undefined,
+    }).filter(([, v]) => v !== undefined),
+  ) as EvalStats;
+  const commit =
+    typeof raw.measuredCommit === 'number'
+      ? String(raw.measuredCommit)
+      : text(raw.measuredCommit);
+  return {
+    verdict: text(raw.verdict),
+    recorded: text(raw.recorded),
+    source: text(raw.source),
+    sourceVisibility: text(raw.sourceVisibility),
+    ...(Object.keys(metrics).length ? { metrics } : {}),
+    ...(Object.keys(stats).length ? { stats } : {}),
+    ...(commit ? { measuredCommit: commit } : {}),
+  };
+}
+
 export function readEvalScore(entity: Entity): EvalScore | undefined {
   const raw = annotation(entity, ANNOTATION_EVAL_SCORE);
   if (!raw) return undefined;
   try {
     const parsed = JSON.parse(raw);
-    return typeof parsed === 'object' && parsed !== null ? parsed : undefined;
+    return typeof parsed === 'object' && parsed !== null
+      ? sanitizeScore(parsed)
+      : undefined;
   } catch {
     return undefined;
   }

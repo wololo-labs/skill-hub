@@ -178,7 +178,7 @@ export const ScoreBadge = ({
           {label}
           {state === 'gain' && headline && (
             <span className={classes.metric}>
-              {headline.candidate.toFixed(3)}
+              {fmt(headline.candidate)}
             </span>
           )}
         </span>
@@ -199,6 +199,10 @@ export const ScoreBadge = ({
     </span>
   );
 };
+
+/** A number as three places, or the text a hand-written score gave. */
+const fmt = (value: number | string) =>
+  typeof value === 'number' ? value.toFixed(3) : value;
 
 /** The first metric, which is the one the gate is named after. */
 function topMetric(score: EvalScore) {

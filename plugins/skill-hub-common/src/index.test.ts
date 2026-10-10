@@ -1,4 +1,4 @@
-import { EvalScore, isScoreStale, scoreState } from './index';
+import { EvalScore, isScoreStale, readEvalScore, scoreState } from './index';
 
 const stats = (significantImprovement: boolean) => ({
   meanDelta: 0.0003,
@@ -60,5 +60,43 @@ describe('isScoreStale', () => {
     expect(isScoreStale(score(undefined), 'b'.repeat(40))).toBe(false);
     expect(isScoreStale(score('a'.repeat(40)), undefined)).toBe(false);
     expect(isScoreStale(undefined, 'b'.repeat(40))).toBe(false);
+  });
+});
+
+describe('readEvalScore on a legacy or hand-written score', () => {
+  const entityWith = (raw: unknown) =>
+    ({
+      apiVersion: 'backstage.io/v1alpha1',
+      kind: 'System',
+      metadata: {
+        name: 'x',
+        annotations: { 'wololo.dev/eval-score': JSON.stringify(raw) },
+      },
+    }) as any;
+
+  it('keeps only values of the right type, so no surface has to guard', () => {
+    const score = readEvalScore(
+      entityWith({
+        verdict: 7,
+        recorded: 20261009,
+        measuredCommit: 1234567,
+        metrics: {
+          ok: { candidate: 0.5, baseline: 0.4 },
+          text: { candidate: 'n/a', baseline: '0.4' },
+          junk: { candidate: { x: 1 }, baseline: null },
+        },
+        stats: { ciLow: 'low', ciHigh: 0.1, significantImprovement: 'yes' },
+      }),
+    )!;
+    expect(score.verdict).toBeUndefined();
+    expect(score.recorded).toBeUndefined();
+    expect(score.measuredCommit).toBe('1234567');
+    expect(Object.keys(score.metrics!)).toEqual(['ok', 'text']);
+    expect(score.stats).toEqual({ ciHigh: 0.1 });
+  });
+
+  it('never throws when asked whether a hand-written score is stale', () => {
+    const score = readEvalScore(entityWith({ verdict: 'PASS', measuredCommit: 1234567 }));
+    expect(() => isScoreStale(score, 'abc1234')).not.toThrow();
   });
 });
