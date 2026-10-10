@@ -13,6 +13,9 @@ import {
   ANNOTATION_INSTALL_UNAVAILABLE,
   ANNOTATION_REPO,
   ANNOTATION_SOURCE_LOCATION,
+  APM_ACCEPTED_NOT_OFFERED,
+  APM_ALL_TARGETS,
+  APM_EXPLICIT_ONLY_TARGETS,
   APM_TARGETS_VERSION,
   EvalScore,
   HARNESSES,
@@ -355,7 +358,9 @@ function declaredTargets(apm: Record<string, unknown>): {
     return { error: 'declares both targets and target' };
   if (!hasTargets && !hasTarget) return {};
 
-  const key = hasTargets ? 'targets' : 'target';
+  if (hasTarget) return declaredSingular(apm.target);
+
+  const key = 'targets';
   const raw = apm[key];
   let tokens: string[];
   if (Array.isArray(raw)) {
@@ -365,13 +370,11 @@ function declaredTargets(apm: Record<string, unknown>): {
   } else if (typeof raw === 'object') {
     return { error: `${key} must be a list or a single target` };
   } else {
-    tokens = hasTargets ? [String(raw)] : String(raw).split(',');
+    tokens = [String(raw)];
   }
   tokens = tokens.map(t => t.trim()).filter(Boolean);
 
-  if (!tokens.length) {
-    return hasTargets ? { error: 'has an empty targets list' } : {};
-  }
+  if (!tokens.length) return { error: 'has an empty targets list' };
   if (tokens.includes('all')) return {};
   const declared = tokens.map(t => MANIFEST_TARGET_ALIASES[t] ?? t);
 
@@ -390,6 +393,62 @@ function declaredTargets(apm: Record<string, unknown>): {
     };
   }
   return { tokens: declared };
+}
+
+/**
+ * The singular `target:` field, read as APM's `parse_target_field` reads it
+ * (0.33.0): tokens are lowercased and split on commas, an alias resolves to
+ * its target, an empty value or a non-string entry is an error, and `all` is
+ * the real all, which cannot be combined with anything but explicit-only
+ * targets. A missing value declares nothing.
+ */
+function declaredSingular(raw: unknown): {
+  tokens?: string[];
+  error?: string;
+  cause?: InstallUnavailable;
+} {
+  if (raw === null || raw === undefined) return {};
+  let parts: string[];
+  if (typeof raw === 'string') {
+    parts = raw.split(',');
+  } else if (Array.isArray(raw)) {
+    if (!raw.every(item => typeof item === 'string')) {
+      return { error: 'has a target that is not a string' };
+    }
+    parts = raw as string[];
+  } else {
+    return { error: 'target must be a string or a list of strings' };
+  }
+  const tokens = parts.map(t => t.trim().toLowerCase()).filter(Boolean);
+  if (!tokens.length) return { error: 'has an empty target value' };
+
+  const aliases: Record<string, string> = {
+    vscode: 'copilot',
+    agents: 'copilot',
+    agy: 'antigravity',
+  };
+  const known = HARNESSES.map(h => h.id) as string[];
+  const resolved = tokens.map(t => aliases[t] ?? t);
+  const unknown = resolved.filter(
+    t => t !== 'all' && !known.includes(t) && !APM_ACCEPTED_NOT_OFFERED.includes(t),
+  );
+  if (unknown.length) {
+    return {
+      error: `declares ${unknown.join(
+        ', ',
+      )}, which APM ${APM_TARGETS_VERSION} does not accept (or is newer than this hub's list)`,
+      cause: 'unknown-target',
+    };
+  }
+
+  if (resolved.includes('all')) {
+    const others = resolved.filter(t => t !== 'all');
+    if (others.some(t => !APM_EXPLICIT_ONLY_TARGETS.includes(t))) {
+      return { error: "combines 'all' with other targets" };
+    }
+    return { tokens: [...APM_ALL_TARGETS, ...others] };
+  }
+  return { tokens: resolved.filter(t => known.includes(t)) };
 }
 
 /**

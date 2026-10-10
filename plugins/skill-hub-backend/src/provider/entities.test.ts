@@ -457,6 +457,52 @@ publish:
       expect(readHarnesses(system)).toEqual(['claude', 'copilot']);
     });
 
+    describe('the singular target field, which APM reads with parse_target_field', () => {
+      it.each([
+        ['Claude', ['claude']],
+        ['agents', ['copilot']],
+        ['agy', ['antigravity']],
+        ['vscode', ['copilot']],
+        ['"Claude, COPILOT"', ['claude', 'copilot']],
+        ['[Claude, vscode]', ['claude', 'copilot']],
+      ])('lowercases and resolves aliases in %s', async (value, expected) => {
+        const { system } = await pack(`name: p\ntarget: ${value}\n`);
+        expect(readHarnesses(system)).toEqual(expected);
+      });
+
+      it.each([
+        ['an empty string', 'target: ""'],
+        ['only commas', 'target: " , "'],
+        ['an empty list', 'target: []'],
+        ['a non-string entry', 'target: [claude, 1]'],
+        ['all mixed with a target', 'target: "all,claude"'],
+      ])('refuses %s', async (_, yaml) => {
+        const { system, warnings } = await pack(`name: p\n${yaml}\n`);
+        expect(readHarnesses(system)).toEqual([]);
+        expect(readInstallUnavailable(system)).toBe('refused');
+        expect(warnings).toEqual([expect.stringContaining('packages/p')]);
+      });
+
+      it('reads all as every target APM auto-detects, not as no restriction', async () => {
+        // Unlike `targets: all`, which APM folds to nothing declared, the
+        // singular field returns the real all and it does not include the
+        // explicit-only targets.
+        const { system } = await pack('name: p\ntarget: all\n');
+        const offered = readHarnesses(system);
+        expect(offered).toContain('gemini');
+        expect(offered).toContain('codex');
+        for (const explicitOnly of ['antigravity', 'hermes', 'agent-skills']) {
+          expect(offered).not.toContain(explicitOnly);
+        }
+      });
+
+      it('lets all be combined with explicit-only targets', async () => {
+        const { system } = await pack('name: p\ntarget: "all, agent-skills"\n');
+        expect(readHarnesses(system)).toContain('agent-skills');
+        expect(readHarnesses(system)).toContain('claude');
+      });
+    });
+
     it('reads a lone value under targets as one target', async () => {
       const { system } = await pack('name: p\ntargets: claude\n');
       expect(readHarnesses(system)).toEqual(['claude']);

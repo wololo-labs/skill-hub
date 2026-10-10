@@ -49,6 +49,44 @@ export const HARNESSES = [
  */
 export const APM_TARGETS_VERSION = '0.33.0';
 
+/**
+ * What the singular `target: all` in apm.yml means to APM: every target it
+ * auto-detects (`ALL_CANONICAL_TARGETS`, with APM's `vscode` as `copilot`).
+ * The explicit-only targets are not part of it, and may be added to it.
+ */
+export const APM_ALL_TARGETS: readonly string[] = [
+  'claude',
+  'codex',
+  'copilot',
+  'cursor',
+  'gemini',
+  'grok-build',
+  'kiro',
+  'opencode',
+  'windsurf',
+];
+
+/** Targets that are only ever deployed to when named, never by `all`. */
+export const APM_EXPLICIT_ONLY_TARGETS: readonly string[] = [
+  'agent-skills',
+  'antigravity',
+  'grok-cloud',
+  'hermes',
+];
+
+/**
+ * Targets the singular `target:` field accepts that the hub has no label or
+ * command for: experimental, or MCP only. APM reads a pack naming them
+ * normally, so they are not an error, they are just not offered.
+ */
+export const APM_ACCEPTED_NOT_OFFERED: readonly string[] = [
+  'copilot-app',
+  'copilot-cowork',
+  'grok-cloud',
+  'intellij',
+  'openclaw',
+];
+
 export type HarnessId = (typeof HARNESSES)[number]['id'];
 
 /** One metric from an eval gate report: candidate against its baseline. */
