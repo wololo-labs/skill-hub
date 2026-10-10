@@ -1,7 +1,9 @@
 import { Tooltip, makeStyles } from '@material-ui/core';
 import {
   EvalScore,
+  describeBaseline,
   describeChange,
+  describeConfidence,
   describeOrigin,
   describeVerdict,
   isMeasuredWorse,
@@ -68,7 +70,7 @@ const useStyles = makeStyles(theme => ({
     borderStyle: 'dashed',
     fontWeight: 600,
   },
-  // Passed, but nothing shows it beats the model alone. Amber and dashed: not
+  // Passed, but nothing shows it beats the baseline. Amber and dashed: not
   // the green of a demonstrated gain, not the red of a failure, and not the
   // grey of unscored.
   nogain: {
@@ -136,7 +138,7 @@ export const ScoreBadge = ({
   const verdict = score.verdict?.toUpperCase();
   const label = {
     gain: 'measured gain',
-    'no-gain': 'no measured gain over the model alone',
+    'no-gain': `no measured gain over ${describeBaseline(score)}`,
     regressed: 'regressed',
     failed: describeVerdict(score),
     unscored: 'unscored',
@@ -152,10 +154,9 @@ export const ScoreBadge = ({
   // One description of the change, here and on the page, so the two cannot
   // round it differently.
   const change = describeChange(score.stats);
+  const level = describeConfidence(score.stats);
   const interval = change
-    ? ` Change over the model alone ${change}, ${Math.round(
-        (score.stats?.confidence ?? 0.95) * 100,
-      )}% interval.`
+    ? ` Change against ${describeBaseline(score)} ${change}${level ? `, ${level}` : ''}.`
     : '';
   const gain = state === 'gain' ? change : undefined;
 
@@ -175,7 +176,7 @@ export const ScoreBadge = ({
     : '';
   let explanation = `Eval gate report has no verdict, so it counts as a failed gate.${measured}`;
   if (isMeasuredWorse(score)) {
-    explanation = `Eval gate ${verdict}: it passed its gate, but measured significantly worse than the model alone.${interval}${measured}${source}`;
+    explanation = `Eval gate ${verdict}: it passed its gate, but measured significantly worse than ${describeBaseline(score)}.${interval}${measured}${source}`;
   } else if (verdict) {
     explanation = `Eval gate ${verdict}: ${label}.${interval}${measured}${source}`;
   }

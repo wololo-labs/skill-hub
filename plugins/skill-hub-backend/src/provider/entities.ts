@@ -149,6 +149,7 @@ function readGateReport(reportJson: string): EvalScore | undefined {
     subject?: { commit?: unknown } | null;
     signals?: unknown;
     stats?: Record<string, unknown> | null;
+    baseline_kind?: unknown;
   };
   try {
     report = JSON.parse(reportJson);
@@ -215,6 +216,8 @@ function readGateReport(reportJson: string): EvalScore | undefined {
     // one the gate can return (`regression`, `refused`) is carried through as
     // itself rather than flattened to a failure it might not be.
     origin: 'gate-report' as const,
+    // Only when the report says the baseline was no skill at all.
+    ...(report.baseline_kind === 'no-skill' ? { baselineKind: 'no-skill' as const } : {}),
     verdict: report.verdict.toUpperCase(),
     recorded: text(report.recorded),
     source: text(report.source),

@@ -1,6 +1,8 @@
 import {
   EvalScore,
+  describeBaseline,
   describeChange,
+  describeConfidence,
   describeOrigin,
   describeVerdict,
   isScoreStale,
@@ -134,31 +136,85 @@ describe('readEvalScore on a legacy or hand-written score', () => {
 });
 
 describe('describeChange', () => {
-  it('states the change, signed, with its interval', () => {
+  const ci = { ciLow: 0.021, ciHigh: 0.084, confidence: 0.95 };
+
+  it('states the change, signed, with its interval when the confidence is given', () => {
+    expect(describeChange({ meanDelta: 0.052, ...ci })).toBe(
+      '+0.0520 (0.0210 to 0.0840)',
+    );
     expect(
-      describeChange({ meanDelta: 0.052, ciLow: 0.021, ciHigh: 0.084 }),
-    ).toBe('+0.0520 (0.0210 to 0.0840)');
-    expect(
-      describeChange({ meanDelta: -0.061, ciLow: -0.09, ciHigh: -0.03 }),
+      describeChange({
+        meanDelta: -0.061,
+        ciLow: -0.09,
+        ciHigh: -0.03,
+        confidence: 0.9,
+      }),
     ).toBe('-0.0610 (-0.0900 to -0.0300)');
   });
 
   it('does not round a small significant gain down to zero', () => {
     expect(
-      describeChange({ meanDelta: 0.0004, ciLow: 0.0002, ciHigh: 0.0006 }),
+      describeChange({
+        meanDelta: 0.0004,
+        ciLow: 0.0002,
+        ciHigh: 0.0006,
+        confidence: 0.95,
+      }),
     ).toBe('+0.0004 (0.0002 to 0.0006)');
   });
 
+  it.each([undefined, 0, 1, 1.5, -0.2])(
+    'shows no interval when the confidence is %s, rather than assuming one',
+    confidence => {
+      expect(
+        describeChange({ meanDelta: 0.052, ciLow: 0.021, ciHigh: 0.084, confidence }),
+      ).toBe('+0.0520');
+    },
+  );
+
   it('says unrecorded when the mean is missing, never a blank', () => {
-    expect(describeChange({ ciLow: 0.021, ciHigh: 0.084 })).toBe(
-      'unrecorded (0.0210 to 0.0840)',
-    );
+    expect(describeChange(ci)).toBe('unrecorded (0.0210 to 0.0840)');
   });
 
   it('gives the mean alone when there is no interval, and nothing when there is neither', () => {
     expect(describeChange({ meanDelta: 0.1 })).toBe('+0.1000');
     expect(describeChange({})).toBeUndefined();
     expect(describeChange(undefined)).toBeUndefined();
+  });
+});
+
+describe('describeConfidence', () => {
+  it('names the level only when the report states a usable one', () => {
+    expect(describeConfidence({ confidence: 0.95 })).toBe('95% interval');
+    expect(describeConfidence({ confidence: 0.9 })).toBe('90% interval');
+    for (const confidence of [undefined, 0, 1, 2]) {
+      expect(describeConfidence({ confidence })).toBeUndefined();
+    }
+  });
+});
+
+describe('describeBaseline', () => {
+  it("says the gate's baseline unless the report states a no-skill one", () => {
+    expect(describeBaseline({ verdict: 'PASS' })).toBe("the gate's baseline");
+    expect(describeBaseline({ verdict: 'PASS', baselineKind: 'no-skill' })).toBe(
+      'the model alone',
+    );
+  });
+
+  it('reads the kind from a report and ignores a value it does not know', () => {
+    const read = (baselineKind: unknown) =>
+      readEvalScore({
+        apiVersion: 'backstage.io/v1alpha1',
+        kind: 'System',
+        metadata: {
+          name: 'x',
+          annotations: {
+            'wololo.dev/eval-score': JSON.stringify({ verdict: 'PASS', baselineKind }),
+          },
+        },
+      } as any)!;
+    expect(describeBaseline(read('no-skill'))).toBe('the model alone');
+    expect(describeBaseline(read('something'))).toBe("the gate's baseline");
   });
 });
 

@@ -284,6 +284,30 @@ publish:
     };
     const claim = { verdict: 'PASS', stats: { significant_improvement: true } };
 
+    it('records a no-skill baseline only when the report says so', async () => {
+      const kind = async (extra: object) => {
+        const { entities } = await buildEntities({
+          repo: REPO,
+          commitSha: SHA,
+          manifest: parseManifest(
+            'owner: team\npublish:\n  packages: packages/*/apm.yml\n',
+          ),
+          ...repository({
+            'packages/p/apm.yml': 'name: p\nversion: 0.1.0\n',
+            'packages/p/eval-gate-report.json': JSON.stringify({
+              verdict: 'pass',
+              signals: [],
+              ...extra,
+            }),
+          }),
+        });
+        return readEvalScore(entities[0])!.baselineKind;
+      };
+      expect(await kind({ baseline_kind: 'no-skill' })).toBe('no-skill');
+      expect(await kind({})).toBeUndefined();
+      expect(await kind({ baseline_kind: 'previous-release' })).toBeUndefined();
+    });
+
     it('reads a gain from a gate report', async () => {
       expect(
         await stateOf({

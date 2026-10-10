@@ -25,7 +25,9 @@ import { catalogApiRef } from '@backstage/plugin-catalog-react';
 import useAsyncRetry from 'react-use/esm/useAsyncRetry';
 import useAsync from 'react-use/esm/useAsync';
 import {
+  describeBaseline,
   describeChange,
+  describeConfidence,
   describeOrigin,
   describeVerdict,
   isScoreStale,
@@ -390,7 +392,11 @@ export const AssetPage = () => {
                       )}
                       {describeChange(score.stats) && (
                         <Row
-                          label={`Change vs model alone (${Math.round((score.stats?.confidence ?? 0.95) * 100)}% interval)`}
+                          label={`Change vs ${describeBaseline(score)}${
+                            describeConfidence(score.stats)
+                              ? ` (${describeConfidence(score.stats)})`
+                              : ''
+                          }`}
                           value={
                             <span className={classes.mono}>
                               {describeChange(score.stats)}

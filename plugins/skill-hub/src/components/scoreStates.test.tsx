@@ -104,11 +104,11 @@ describe('the four score states', () => {
       </>,
     );
     expect(
-      await screen.findAllByText('no measured gain over the model alone'),
+      await screen.findAllByText("no measured gain over the gate's baseline"),
     ).not.toHaveLength(0);
     expect(command()).toBeInTheDocument();
     expect(screen.getByRole('note')).toHaveTextContent(
-      'No measured gain over the model alone',
+      "No measured gain over the gate's baseline",
     );
   });
 
@@ -145,7 +145,7 @@ describe('the four score states', () => {
     expect(screen.getByText(/measured significantly worse/)).toBeInTheDocument();
     expect(screen.queryByText(/did not pass/)).not.toBeInTheDocument();
     expect(
-      screen.getByText(/passed its gate, but measured significantly worse/),
+      screen.getByText(/passed its gate, but measured significantly worse than the gate's baseline/),
     ).toBeInTheDocument();
     expect(screen.queryByText(/Eval gate PASS: regressed/)).toBeNull();
   });
@@ -168,7 +168,7 @@ describe('staleness', () => {
     const score = { ...SCORES['no gain']!, measuredCommit: MEASURED };
     wrap(<ScoreBadge score={score} pinnedCommit={PINNED} />);
     expect(
-      await screen.findAllByText('no measured gain over the model alone'),
+      await screen.findAllByText("no measured gain over the gate's baseline"),
     ).not.toHaveLength(0);
     expect(
       screen.getByText(
@@ -220,7 +220,7 @@ describe('a legacy score with values of the wrong type', () => {
     } as any;
     wrap(<ScoreBadge score={readEvalScore(entity)} pinnedCommit={PINNED} />);
     expect(
-      await screen.findAllByText('no measured gain over the model alone'),
+      await screen.findAllByText("no measured gain over the gate's baseline"),
     ).not.toHaveLength(0);
   });
 });
@@ -273,11 +273,34 @@ describe('a gain claimed by something that is not a gate run', () => {
       </>,
     );
     expect(
-      await screen.findAllByText('no measured gain over the model alone'),
+      await screen.findAllByText("no measured gain over the gate's baseline"),
     ).not.toHaveLength(0);
     expect(screen.queryByText('measured gain')).not.toBeInTheDocument();
     expect(
       screen.getByText(/Score from an eval-score\.json, not a gate run/),
     ).toBeInTheDocument();
+  });
+});
+
+describe('the baseline is only called the model alone when the report says so', () => {
+  it("says the gate's baseline by default and the model alone for a no-skill baseline", async () => {
+    const stated: EvalScore = { ...SCORES['no gain']!, baselineKind: 'no-skill' };
+    wrap(<ScoreBadge score={stated} pinnedCommit={PINNED} />);
+    expect(
+      await screen.findAllByText('no measured gain over the model alone'),
+    ).not.toHaveLength(0);
+  });
+
+  it('shows no confidence level it was not given', async () => {
+    const unstated: EvalScore = {
+      verdict: 'PASS',
+      origin: 'gate-report',
+      measuredCommit: PINNED,
+      stats: { meanDelta: 0.05, ciLow: 0.02, ciHigh: 0.08, significantImprovement: true },
+    };
+    wrap(<ScoreBadge score={unstated} pinnedCommit={PINNED} />);
+    expect(await screen.findAllByText('+0.0500')).not.toHaveLength(0);
+    expect(screen.queryByText(/95%/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/interval/)).not.toBeInTheDocument();
   });
 });

@@ -51,6 +51,12 @@ export interface EvalScore {
    */
   origin?: ScoreOrigin;
   /**
+   * What the gate compared against, when the report says it was no skill at
+   * all. Without that the baseline is only "the gate's baseline", and the copy
+   * must not claim it is the model alone.
+   */
+  baselineKind?: 'no-skill';
+  /**
    * The gate's aggregate statistics over every case. Absent when the report
    * carries none, which reads as no demonstrated gain, never as a gain.
    */
@@ -84,7 +90,7 @@ export interface EvalStats {
  * What the catalogue can honestly say about an asset's score.
  *
  * `gain`: passed and the improvement is statistically significant.
- * `no-gain`: passed, but nothing shows it beats the model alone.
+ * `no-gain`: passed, but nothing shows it beats the gate's baseline.
  * `regressed`: the gate's verdict is regression.
  * `failed`: any other verdict that is not a pass (`refused`, or none).
  * `unscored`: no report at all.
@@ -133,16 +139,41 @@ export function describeVerdict(score: EvalScore): string {
   return score.verdict?.toUpperCase() ?? 'verdict missing';
 }
 
+/** What the gate compared against, in the words the report supports. */
+export function describeBaseline(score: EvalScore | undefined): string {
+  return score?.baselineKind === 'no-skill' ? 'the model alone' : "the gate's baseline";
+}
+
+/** A confidence level is only usable when it is strictly between 0 and 1. */
+const usableConfidence = (stats: EvalStats | undefined): number | undefined =>
+  stats?.confidence !== undefined &&
+  stats.confidence > 0 &&
+  stats.confidence < 1
+    ? stats.confidence
+    : undefined;
+
 /**
- * The change over the model alone with its interval, for the places that
- * spell it out. A missing mean is said to be unrecorded, never left blank.
+ * The level the interval was computed at, in words, or undefined when the
+ * report does not state one. It is never assumed: an interval of unknown
+ * confidence is not shown as a 95% one.
+ */
+export function describeConfidence(stats: EvalStats | undefined): string | undefined {
+  const level = usableConfidence(stats);
+  return level === undefined ? undefined : `${Math.round(level * 100)}% interval`;
+}
+
+/**
+ * The change against the baseline with its interval, for the places that spell
+ * it out. A missing mean is said to be unrecorded, never left blank, and the
+ * interval is shown only when the report states the confidence it was taken at.
  */
 export function describeChange(
   stats: EvalStats | undefined,
 ): string | undefined {
   if (!stats) return undefined;
   const { meanDelta, ciLow, ciHigh } = stats;
-  const hasInterval = ciLow !== undefined && ciHigh !== undefined;
+  const hasInterval =
+    ciLow !== undefined && ciHigh !== undefined && usableConfidence(stats) !== undefined;
   if (meanDelta === undefined && !hasInterval) return undefined;
 
   // Four places and a sign: three would show a significant +0.0004 as +0.000.
@@ -260,6 +291,7 @@ function sanitizeScore(raw: Record<string, unknown>): EvalScore {
   return {
     verdict: text(raw.verdict),
     ...(origin ? { origin } : {}),
+    ...(raw.baselineKind === 'no-skill' ? { baselineKind: 'no-skill' as const } : {}),
     recorded: text(raw.recorded),
     source: text(raw.source),
     sourceVisibility: text(raw.sourceVisibility),

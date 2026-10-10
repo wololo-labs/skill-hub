@@ -4,6 +4,7 @@ import { InfoCard, Link } from '@backstage/core-components';
 import { useApi } from '@backstage/core-plugin-api';
 import {
   HARNESSES,
+  describeBaseline,
   isMeasuredWorse,
   passedGate,
   ScoreState,
@@ -184,12 +185,12 @@ function blocked(
   state: ScoreState,
   passed: boolean,
   measuredWorse: boolean,
+  baseline: string,
 ): { title: string; body: string } {
   if (measuredWorse) {
     return {
-      title:
-        'Install is blocked: the asset measured worse than the model alone',
-      body: "It passed the gate's own threshold, but the measurement shows it significantly worse than the model without it, so the command is withheld. Fix the asset and publish a report that does not show a regression, and it becomes installable on the next sync.",
+      title: `Install is blocked: the asset measured worse than ${baseline}`,
+      body: `It passed the gate's own threshold, but the measurement shows it significantly worse than ${baseline}, so the command is withheld. Fix the asset and publish a report that does not show a regression, and it becomes installable on the next sync.`,
     };
   }
   if (state === 'regressed' || state === 'failed') {
@@ -248,7 +249,12 @@ export const InstallPanel = ({ asset, stale = false }: InstallPanelProps) => {
   // problem for whoever is reading.
   const state = scoreState(asset.score);
   const installable = passed && (!stale || acknowledged);
-  const message = blocked(state, passed, isMeasuredWorse(asset.score));
+  const message = blocked(
+    state,
+    passed,
+    isMeasuredWorse(asset.score),
+    describeBaseline(asset.score),
+  );
   // Install stays open for a pass that shows no gain, because the asset is not
   // broken, but the reader is told in as many words what the score does not say.
   const noGain = state === 'no-gain';
@@ -336,9 +342,9 @@ export const InstallPanel = ({ asset, stale = false }: InstallPanelProps) => {
         {passed && noGain && (
           <div className={classes.noGainNote} role="note">
             <p className={classes.staleText}>
-              No measured gain over the model alone. This asset passed its gate,
-              but the gate could not show it does better than the model without
-              it.
+              No measured gain over {describeBaseline(asset.score)}. This asset
+              passed its gate, but the gate could not show it does better than
+              that baseline.
             </p>
           </div>
         )}
