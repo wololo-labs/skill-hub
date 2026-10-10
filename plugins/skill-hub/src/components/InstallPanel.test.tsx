@@ -16,6 +16,9 @@ const render = async (installUnavailable?: InstallUnavailable) => {
     install: {},
     blockedBy: [],
     installUnavailable,
+    // Only an asset that passed its gate is told why it has no command; for
+    // the rest the score is the reason.
+    score: { verdict: 'PASS' },
   } as unknown as Asset;
   await renderInTestApp(<InstallPanel asset={asset} />, {
     apis: [[skillHubApiRef, api]],

@@ -7,6 +7,8 @@ import {
   EvalScore,
   InstallCommands,
   InstallUnavailable,
+  ScoreState,
+  scoreState,
   readEvalScore,
   readHarnesses,
   readInstallCommands,
@@ -74,11 +76,41 @@ function shortOwner(ref: string): string {
   }
 }
 
-export type ScoreState = 'scored' | 'unscored';
-
-export function scoreState(asset: Asset): ScoreState {
-  return asset.score ? 'scored' : 'unscored';
+/** The asset's score state, from the one definition in the common package. */
+export function scoreStateOf(asset: Asset): ScoreState {
+  return scoreState(asset.score);
 }
+
+/** How many assets are in each state, every state present even when zero. */
+export function countByState(assets: Asset[]): Record<ScoreState, number> {
+  const counts: Record<ScoreState, number> = {
+    gain: 0,
+    'no-gain': 0,
+    regressed: 0,
+    failed: 0,
+    unscored: 0,
+  };
+  for (const asset of assets) counts[scoreStateOf(asset)] += 1;
+  return counts;
+}
+
+/** The words a state goes by in facets and counts. */
+export const SCORE_STATE_LABEL: Record<ScoreState, string> = {
+  gain: 'measured gain',
+  'no-gain': 'no measured gain',
+  regressed: 'regressed',
+  failed: 'failed gate',
+  unscored: 'unscored',
+};
+
+/** Reading order: what clears the gate with a demonstrated gain comes first. */
+const SCORE_STATE_RANK: Record<ScoreState, number> = {
+  gain: 0,
+  'no-gain': 1,
+  regressed: 2,
+  failed: 3,
+  unscored: 4,
+};
 
 export interface Facets {
   type: string[];
@@ -97,7 +129,7 @@ export const EMPTY_FACETS: Facets = {
 };
 
 /**
- * Scored assets first, then alphabetically.
+ * Demonstrated gain first, then the other states in order, then alphabetically.
  *
  * The catalogue's whole claim is that the score decides whether an asset can
  * be installed, so the assets that clear the gate are the ones worth reading
@@ -105,8 +137,9 @@ export const EMPTY_FACETS: Facets = {
  * this: an estate that is mostly unscored still says so, at the top.
  */
 export function byScoreThenName(a: Asset, b: Asset): number {
-  const scored = Number(Boolean(b.score)) - Number(Boolean(a.score));
-  return scored !== 0 ? scored : a.title.localeCompare(b.title);
+  const rank =
+    SCORE_STATE_RANK[scoreStateOf(a)] - SCORE_STATE_RANK[scoreStateOf(b)];
+  return rank !== 0 ? rank : a.title.localeCompare(b.title);
 }
 
 export function applyFacets(assets: Asset[], facets: Facets): Asset[] {
@@ -120,7 +153,7 @@ export function applyFacets(assets: Asset[], facets: Facets): Asset[] {
     ) {
       return false;
     }
-    if (facets.score.length && !facets.score.includes(scoreState(asset))) {
+    if (facets.score.length && !facets.score.includes(scoreStateOf(asset))) {
       return false;
     }
     if (
@@ -185,7 +218,7 @@ export function facetCounts(
     type: a => [a.type],
     owner: a => [a.owner],
     harness: a => a.harnesses,
-    score: a => [scoreState(a)],
+    score: a => [scoreStateOf(a)],
   };
 
   const others = { ...facets, [dimension]: [] } as Facets;

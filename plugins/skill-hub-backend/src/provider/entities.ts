@@ -21,6 +21,7 @@ import {
   HARNESSES,
   InstallCommands,
   InstallUnavailable,
+  passedGate,
 } from '@internal/plugin-skill-hub-common';
 import { RepoRef, TreeEntry } from '../github/GithubAssetReader';
 import {
@@ -121,7 +122,12 @@ function installCommands(
   commitSha: string,
   harnesses: string[],
   target: { kind: 'package'; dir: string } | { kind: 'unit'; path: string },
+  score: EvalScore | undefined,
 ): InstallCommands {
+  // The install gate is enforced here as well as in the UI: an asset with no
+  // passing score has no command to copy, so the block is not only a button
+  // that was left off a page.
+  if (!passedGate(score)) return {};
   const subject = target.kind === 'package' ? target.dir : target.path;
   // A pack at the repository root has no path to check or to put in the
   // command, and an empty path is not an unsafe one.
@@ -168,6 +174,8 @@ function readGateReport(reportJson: string): EvalScore | undefined {
     sourceVisibility?: unknown;
     subject?: { commit?: unknown } | null;
     signals?: unknown;
+    stats?: Record<string, unknown> | null;
+    baseline_kind?: unknown;
   };
   try {
     report = JSON.parse(reportJson);
@@ -179,7 +187,14 @@ function readGateReport(reportJson: string): EvalScore | undefined {
 
   const signals = Array.isArray(report.signals) ? report.signals : [];
   const scored = signals.filter(
-    (s): s is { evaluator_id: string; candidate_mean: number; baseline_mean: number; guarded?: boolean } =>
+    (
+      s,
+    ): s is {
+      evaluator_id: string;
+      candidate_mean: number;
+      baseline_mean: number;
+      guarded?: boolean;
+    } =>
       typeof s === 'object' &&
       s !== null &&
       typeof (s as any).evaluator_id === 'string' &&
@@ -202,20 +217,49 @@ function readGateReport(reportJson: string): EvalScore | undefined {
 
   const text = (value: unknown) =>
     typeof value === 'string' && value ? value : undefined;
-  const commit = text(report.subject?.commit);
+  // A sha is lower cased, and anything else (a tag, a branch) is kept as it was
+  // written: dropping it would make a score taken at v1.2.0 read as current.
+  const written = text(report.subject?.commit)?.trim();
+  const commit =
+    written && /^[0-9a-f]{7,40}$/i.test(written)
+      ? written.toLowerCase()
+      : written;
+  const num = (value: unknown) =>
+    typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+  const flag = (value: unknown) =>
+    typeof value === 'boolean' ? value : undefined;
+  const raw = typeof report.stats === 'object' ? report.stats : null;
+  // Only what the report states is carried. A flag the report does not set
+  // stays unset, so a missing `significant_improvement` can never read as one.
+  const stats = raw
+    ? Object.fromEntries(
+        Object.entries({
+          meanDelta: num(raw.mean_delta),
+          ciLow: num(raw.ci_low),
+          ciHigh: num(raw.ci_high),
+          confidence: num(raw.confidence),
+          significantImprovement: flag(raw.significant_improvement),
+          significantRegression: flag(raw.significant_regression),
+        }).filter(([, v]) => v !== undefined),
+      )
+    : {};
 
   return {
     // `pass` is the only verdict that opens the install gate, and every other
     // one the gate can return (`regression`, `refused`) is carried through as
     // itself rather than flattened to a failure it might not be.
+    origin: 'gate-report' as const,
+    // Only when the report says the baseline was no skill at all.
+    ...(report.baseline_kind === 'no-skill'
+      ? { baselineKind: 'no-skill' as const }
+      : {}),
     verdict: report.verdict.toUpperCase(),
     recorded: text(report.recorded),
     source: text(report.source),
     sourceVisibility: text(report.sourceVisibility),
     ...(Object.keys(metrics).length ? { metrics } : {}),
-    ...(commit && /^[0-9a-f]{7,40}$/.test(commit)
-      ? { measuredCommit: commit }
-      : {}),
+    ...(Object.keys(stats).length ? { stats } : {}),
+    ...(commit ? { measuredCommit: commit } : {}),
   };
 }
 
@@ -241,12 +285,14 @@ function readPackageScore(
         const entity = doc.toJS() as Entity | null;
         const raw = entity?.metadata?.annotations?.[ANNOTATION_EVAL_SCORE];
         if (!raw) continue;
-        const score = JSON.parse(raw) as EvalScore;
+        // Stamped here, whatever the file says about itself.
+        const score = {
+          ...(JSON.parse(raw) as EvalScore),
+          origin: 'catalogue' as const,
+        };
         const location =
           entity?.metadata?.annotations?.[ANNOTATION_SOURCE_LOCATION];
-        const measured = /\/(?:tree|blob)\/([0-9a-f]{7,40})\//.exec(
-          location ?? '',
-        )?.[1];
+        const measured = /\/(?:tree|blob)\/([^/]+)\//.exec(location ?? '')?.[1];
         return measured ? { ...score, measuredCommit: measured } : score;
       }
     } catch {
@@ -258,9 +304,10 @@ function readPackageScore(
       const parsed = JSON.parse(evalScoreJson) as EvalScore & {
         commit?: string;
       };
+      const stamped = { ...parsed, origin: 'eval-score' as const };
       return parsed.commit
-        ? { ...parsed, measuredCommit: parsed.commit }
-        : parsed;
+        ? { ...stamped, measuredCommit: parsed.commit }
+        : stamped;
     } catch {
       return undefined;
     }
@@ -440,7 +487,10 @@ function declaredSingular(raw: unknown): {
   const known = HARNESSES.map(h => h.id) as string[];
   const resolved = tokens.map(t => aliases[t] ?? t);
   const unknown = resolved.filter(
-    t => t !== 'all' && !known.includes(t) && !APM_ACCEPTED_NOT_OFFERED.includes(t),
+    t =>
+      t !== 'all' &&
+      !known.includes(t) &&
+      !APM_ACCEPTED_NOT_OFFERED.includes(t),
   );
   if (unknown.length) {
     return {
@@ -558,9 +608,24 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
     bodyPath: string | undefined,
     harnesses: string[],
   ) => ({
-    [ANNOTATION_SOURCE_LOCATION]: `url:${sourceUrl(repo, commitSha, path, kind)}`,
-    'backstage.io/managed-by-location': `url:${sourceUrl(repo, commitSha, '.agent-assets.yaml', 'blob')}`,
-    'backstage.io/managed-by-origin-location': `url:${sourceUrl(repo, commitSha, '.agent-assets.yaml', 'blob')}`,
+    [ANNOTATION_SOURCE_LOCATION]: `url:${sourceUrl(
+      repo,
+      commitSha,
+      path,
+      kind,
+    )}`,
+    'backstage.io/managed-by-location': `url:${sourceUrl(
+      repo,
+      commitSha,
+      '.agent-assets.yaml',
+      'blob',
+    )}`,
+    'backstage.io/managed-by-origin-location': `url:${sourceUrl(
+      repo,
+      commitSha,
+      '.agent-assets.yaml',
+      'blob',
+    )}`,
     [ANNOTATION_REPO]: `${repo.owner}/${repo.repo}`,
     [ANNOTATION_COMMIT]: commitSha,
     [ANNOTATION_ASSET_PATH]: path,
@@ -569,7 +634,11 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
   });
 
   const sourceLink = (path: string, kind: 'blob' | 'tree') => [
-    { url: sourceUrl(repo, commitSha, path, kind), title: 'Source', type: 'source' },
+    {
+      url: sourceUrl(repo, commitSha, path, kind),
+      title: 'Source',
+      type: 'source',
+    },
   ];
 
   // Packages first: an asset that sits inside one inherits its system, its
@@ -671,10 +740,16 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
             : {}),
           ...(score ? { [ANNOTATION_EVAL_SCORE]: JSON.stringify(score) } : {}),
           ...installAnnotations(
-            installCommands(repo, commitSha, info.harnesses, {
-              kind: 'package',
-              dir,
-            }),
+            installCommands(
+              repo,
+              commitSha,
+              info.harnesses,
+              {
+                kind: 'package',
+                dir,
+              },
+              score,
+            ),
             info,
             info.harnesses,
           ),
@@ -708,10 +783,16 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
               : {}),
             [ANNOTATION_EVAL_SCORE_REF]: `system:${namespace}/${info.name}`,
             ...installAnnotations(
-              installCommands(repo, commitSha, mcpHarnessesOf(info), {
-                kind: 'package',
-                dir,
-              }),
+              installCommands(
+                repo,
+                commitSha,
+                mcpHarnessesOf(info),
+                {
+                  kind: 'package',
+                  dir,
+                },
+                score,
+              ),
               info,
               mcpHarnessesOf(info),
             ),
@@ -804,6 +885,7 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
               commitSha,
               harnesses,
               installTarget(pkg, path),
+              pkg?.score,
             ),
             pkg,
             harnesses,
@@ -858,7 +940,12 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
           description: described.description,
           tags: described.tags,
           annotations: {
-            ...base(assetPath, isDirectoryAsset ? 'tree' : 'blob', path, harnesses),
+            ...base(
+              assetPath,
+              isDirectoryAsset ? 'tree' : 'blob',
+              path,
+              harnesses,
+            ),
             ...scoreAnnotations(pkg, namespace),
             ...installAnnotations(
               installCommands(
@@ -866,6 +953,7 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
                 commitSha,
                 harnesses,
                 installTarget(pkg, assetPath),
+                pkg?.score,
               ),
               pkg,
               harnesses,

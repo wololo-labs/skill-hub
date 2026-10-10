@@ -7,6 +7,10 @@ import {
   HARNESSES,
   InstallUnavailable,
   passedGate,
+  describeBaseline,
+  isMeasuredWorse,
+  ScoreState,
+  scoreState,
 } from '@internal/plugin-skill-hub-common';
 import { Asset } from '../model';
 import { skillHubApiRef } from '../api';
@@ -91,6 +95,16 @@ const useStyles = makeStyles(theme => ({
     fontSize: 12.5,
     lineHeight: 1.55,
   },
+  // A note, not a second warning box: it states what the score does not say
+  // and sits beside the dashed amber badge that says the same thing.
+  noGainNote: {
+    padding: theme.spacing(0.25, 0, 0.25, 1.5),
+    marginBottom: theme.spacing(2),
+    borderLeft: `3px dashed ${theme.palette.status.warning}`,
+    color: theme.palette.text.primary,
+    fontSize: 12.5,
+    lineHeight: 1.55,
+  },
   acknowledge: {
     display: 'flex',
     alignItems: 'center',
@@ -169,10 +183,24 @@ export interface InstallPanelProps {
  * difference matters to whoever is reading: nobody measured this, somebody
  * measured it and it failed, or it passed against a different tree.
  */
-function blocked(failed: boolean, passed: boolean): { title: string; body: string } {
-  if (failed) {
+function blocked(
+  state: ScoreState,
+  passed: boolean,
+  measuredWorse: boolean,
+  baseline: string,
+): { title: string; body: string } {
+  if (measuredWorse) {
     return {
-      title: 'Install is blocked: the eval gate failed',
+      title: `Install is blocked: the asset measured worse than ${baseline}`,
+      body: `It passed the gate's own threshold, but the measurement shows it significantly worse than ${baseline}, so the command is withheld. Fix the asset and publish a report that does not show a regression, and it becomes installable on the next sync.`,
+    };
+  }
+  if (state === 'regressed' || state === 'failed') {
+    return {
+      title:
+        state === 'regressed'
+          ? 'Install is blocked: the asset regressed'
+          : 'Install is blocked: the eval gate failed',
       body: 'The gate that ran against this asset did not pass, so the measurement above is a record of it not working. Fix the asset and publish a passing report, and it becomes installable on the next sync.',
     };
   }
@@ -219,7 +247,11 @@ export const InstallPanel = ({ asset, stale = false }: InstallPanelProps) => {
   const [acknowledged, setAcknowledged] = useState(false);
   const radios = useRef<Array<HTMLButtonElement | null>>([]);
 
-  if (!offered.length) {
+  const passed = passedGate(asset.score);
+  // A blocked asset has no command on the backend either, so an empty command
+  // list only means "no command" for one that passed; for the others the score
+  // is the reason and is what gets said.
+  if (passed && !offered.length) {
     return (
       <InfoCard title="Install">
         <Typography className={classes.body}>
@@ -231,15 +263,23 @@ export const InstallPanel = ({ asset, stale = false }: InstallPanelProps) => {
   }
 
   const index = Math.min(selected, offered.length - 1);
-  const harness = offered[index];
-  const command = asset.install[harness.id]!;
+  const harness = offered[index] as (typeof offered)[number] | undefined;
+  const command = harness ? asset.install[harness.id] : undefined;
   // Presence of a score is not the gate; a passing verdict is. A report that
   // says the asset failed blocks the command exactly as hard as no report at
   // all, and says so in different words, because the two are not the same
   // problem for whoever is reading.
-  const passed = passedGate(asset.score);
-  const failed = Boolean(asset.score) && !passed;
+  const state = scoreState(asset.score);
   const installable = passed && (!stale || acknowledged);
+  const message = blocked(
+    state,
+    passed,
+    isMeasuredWorse(asset.score),
+    describeBaseline(asset.score),
+  );
+  // Install stays open for a pass that shows no gain, because the asset is not
+  // broken, but the reader is told in as many words what the score does not say.
+  const noGain = state === 'no-gain';
 
   // A radiogroup promises one tab stop and arrow keys. Without this it
   // delivers three tab stops and dead arrows, which is worse than no role.
@@ -268,42 +308,45 @@ export const InstallPanel = ({ asset, stale = false }: InstallPanelProps) => {
           : undefined
       }
     >
-      <div
-        className={classes.harnesses}
-        role="radiogroup"
-        aria-label="Target harness"
-      >
-        {offered.map((h, i) => (
-          <button
-            key={h.id}
-            ref={el => {
-              radios.current[i] = el;
-            }}
-            type="button"
-            role="radio"
-            aria-checked={i === index}
-            // Roving tabindex: the group is one stop, arrows move within it.
-            tabIndex={i === index ? 0 : -1}
-            onKeyDown={onKeyDown}
-            onClick={() => {
-              setSelected(i);
-              setCopied(false);
-            }}
-            className={`${classes.harness} ${
-              i === index ? classes.harnessOn : ''
-            }`}
-          >
-            {h.label}
-          </button>
-        ))}
-      </div>
+      {/* No passing gate means no command, so no harness to pick either. */}
+      {passed && (
+        <div
+          className={classes.harnesses}
+          role="radiogroup"
+          aria-label="Target harness"
+        >
+          {offered.map((h, i) => (
+            <button
+              key={h.id}
+              ref={el => {
+                radios.current[i] = el;
+              }}
+              type="button"
+              role="radio"
+              aria-checked={i === index}
+              // Roving tabindex: the group is one stop, arrows move within it.
+              tabIndex={i === index ? 0 : -1}
+              onKeyDown={onKeyDown}
+              onClick={() => {
+                setSelected(i);
+                setCopied(false);
+              }}
+              className={`${classes.harness} ${
+                i === index ? classes.harnessOn : ''
+              }`}
+            >
+              {h.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {passed && stale && (
         <div className={classes.stale}>
           <p className={classes.staleText}>
             This asset's score was measured against a different commit from the
-            one this command installs, so it does not describe what you would
-            be running.
+            one this command installs, so it does not describe what you would be
+            running.
           </p>
           <label className={classes.acknowledge}>
             <input
@@ -318,7 +361,16 @@ export const InstallPanel = ({ asset, stale = false }: InstallPanelProps) => {
       )}
 
       <Box>
-        {installable ? (
+        {passed && noGain && (
+          <div className={classes.noGainNote} role="note">
+            <p className={classes.staleText}>
+              No measured gain over {describeBaseline(asset.score)}. This asset
+              passed its gate, but the gate could not show it does better than
+              that baseline.
+            </p>
+          </div>
+        )}
+        {installable && harness && command ? (
           <>
             <div className={classes.commandRow}>
               <div className={classes.commandScroll}>
@@ -342,11 +394,9 @@ export const InstallPanel = ({ asset, stale = false }: InstallPanelProps) => {
         ) : (
           <div className={classes.blocked}>
             <Typography className={classes.blockedTitle}>
-              {blocked(failed, passed).title}
+              {message.title}
             </Typography>
-            <Typography className={classes.body}>
-              {blocked(failed, passed).body}
-            </Typography>
+            <Typography className={classes.body}>{message.body}</Typography>
             {!passed && (
               <Box mt={1.5}>
                 <Link

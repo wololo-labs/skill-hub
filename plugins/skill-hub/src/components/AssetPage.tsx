@@ -24,6 +24,14 @@ import { useRouteRef } from '@backstage/frontend-plugin-api';
 import { catalogApiRef } from '@backstage/plugin-catalog-react';
 import useAsyncRetry from 'react-use/esm/useAsyncRetry';
 import useAsync from 'react-use/esm/useAsync';
+import {
+  describeBaseline,
+  describeChange,
+  describeConfidence,
+  describeOrigin,
+  describeVerdict,
+  isScoreStale,
+} from '@internal/plugin-skill-hub-common';
 import { toAsset } from '../model';
 import { skillHubApiRef } from '../api';
 import { rootRouteRef } from '../plugin';
@@ -238,11 +246,7 @@ export const AssetPage = () => {
     asset.repo && asset.commit && asset.path
       ? `https://github.com/${asset.repo}/tree/${asset.commit}/${asset.path}`
       : undefined;
-  const stale =
-    score?.measuredCommit &&
-    asset.commit &&
-    !asset.commit.startsWith(score.measuredCommit) &&
-    !score.measuredCommit.startsWith(asset.commit);
+  const stale = isScoreStale(score, asset.commit);
 
   return (
     <Page themeId="home">
@@ -252,7 +256,7 @@ export const AssetPage = () => {
       >
         <div className={classes.badges}>
           <span className={classes.type}>{asset.type}</span>
-          <ScoreBadge score={score} size="medium" />
+          <ScoreBadge score={score} size="medium" pinnedCommit={asset.commit} />
         </div>
       </Header>
 
@@ -330,7 +334,7 @@ export const AssetPage = () => {
               // chosen harness and the copy receipt all travel to the next one.
               key={asset.entityRef}
               asset={asset}
-              stale={Boolean(stale)}
+              stale={stale}
             />
 
             <InfoCard title="Provenance">
@@ -378,9 +382,27 @@ export const AssetPage = () => {
                 <>
                   <Table size="small">
                     <TableBody>
-                      <Row label="Verdict" value={score.verdict ?? 'recorded'} />
+                      <Row label="Verdict" value={describeVerdict(score)} />
+                      <Row
+                        label="Score from"
+                        value={describeOrigin(score.origin)}
+                      />
                       {score.recorded && (
                         <Row label="Recorded" value={score.recorded} />
+                      )}
+                      {describeChange(score.stats) && (
+                        <Row
+                          label={`Change vs ${describeBaseline(score)}${
+                            describeConfidence(score.stats)
+                              ? ` (${describeConfidence(score.stats)})`
+                              : ''
+                          }`}
+                          value={
+                            <span className={classes.mono}>
+                              {describeChange(score.stats)}
+                            </span>
+                          }
+                        />
                       )}
                       {score.measuredCommit && (
                         <Row
