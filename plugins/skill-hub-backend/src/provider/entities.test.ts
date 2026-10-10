@@ -356,6 +356,27 @@ publish:
       });
     });
 
+    it('does not give codex to a loose MCP file inside the pack', async () => {
+      // The codex evidence covers servers the pack declares under
+      // dependencies.mcp. A file the repository merely publishes from inside
+      // the pack is not one, so codex would install and deliver nothing.
+      const { entities } = await buildEntities({
+        repo: REPO,
+        commitSha: SHA,
+        manifest: parseManifest(
+          'owner: team\npublish:\n  packages: packages/*/apm.yml\n  mcp: packages/*/mcp/*.json\n',
+        ),
+        ...repository({
+          'packages/p/apm.yml': 'name: p\ntargets: [claude, copilot]\n',
+          'packages/p/mcp/loose.json': '{"name":"loose"}',
+        }),
+      });
+      expect(readHarnesses(find(entities, 'API', 'loose')!)).toEqual([
+        'claude',
+        'copilot',
+      ]);
+    });
+
     it('falls back to the repository manifest when the pack declares nothing', async () => {
       const { system } = await pack('name: p\n');
       expect(readHarnesses(system)).toEqual(['claude', 'copilot', 'codex']);

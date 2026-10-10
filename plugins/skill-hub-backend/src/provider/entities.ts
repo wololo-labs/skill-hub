@@ -417,7 +417,9 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
   // [claude, copilot] skips the pack and still writes the server to
   // .codex/config.toml (docs/INSTALL-PROOF.md, APM 0.29.0 and 0.33.0). Only
   // codex is evidenced, so only codex is added, and only where the repository
-  // has not narrowed it away. A pack APM refuses to read offers nothing.
+  // has not narrowed it away. A pack APM refuses to read offers nothing. It
+  // covers servers declared under dependencies.mcp only, not a file the
+  // repository publishes from inside the pack.
   const MCP_DEPLOYED_DESPITE_TARGETS = ['codex'];
   const mcpHarnessesOf = (pkg: PackageInfo): string[] => {
     if (!pkg.harnesses.length) return pkg.harnesses;
@@ -635,7 +637,7 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
       continue;
     }
     const pkg = owningPackage(path);
-    const harnesses = pkg ? mcpHarnessesOf(pkg) : harnessesOf(pkg);
+    const harnesses = harnessesOf(pkg);
     const name = typeof server.name === 'string' ? server.name : stem(path);
     entities.push({
       apiVersion: 'backstage.io/v1alpha1',
