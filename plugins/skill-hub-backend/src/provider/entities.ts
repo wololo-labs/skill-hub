@@ -13,6 +13,7 @@ import {
   ANNOTATION_INSTALL_UNAVAILABLE,
   ANNOTATION_REPO,
   ANNOTATION_SOURCE_LOCATION,
+  APM_TARGETS_VERSION,
   EvalScore,
   HARNESSES,
   InstallCommands,
@@ -277,7 +278,7 @@ function packageHarnesses(
   refused: boolean;
   unavailable?: InstallUnavailable;
 } {
-  const { tokens, error: declarationError } = declaredTargets(apm);
+  const { tokens, error: declarationError, cause } = declaredTargets(apm);
   const error = refusal ?? declarationError;
   const where = dir || '(repository root)';
   if (error) {
@@ -287,7 +288,7 @@ function packageHarnesses(
     return {
       harnesses: [],
       refused: true,
-      unavailable: 'refused',
+      unavailable: refusal ? 'refused' : cause ?? 'refused',
       warnings: [
         `${where}: apm.yml ${error}, so no install command is offered`,
       ],
@@ -298,7 +299,6 @@ function packageHarnesses(
   }
 
   const known = HARNESSES.map(h => h.id) as string[];
-  const unknown = tokens.filter(t => !known.includes(t));
   // A repository that wrote its own harnesses has limited what it supports,
   // so a pack declaring more does not widen that. One that left it out has
   // only taken the default, which is not a limit on a pack.
@@ -306,13 +306,7 @@ function packageHarnesses(
   const harnesses = known.filter(
     id => tokens.includes(id) && allowed.includes(id),
   );
-  const warnings = unknown.length
-    ? [
-        `${where}: apm.yml declares targets this hub does not know (${unknown.join(
-          ', ',
-        )}), so they are not offered`,
-      ]
-    : [];
+  const warnings: string[] = [];
   // A pack nobody can install is a problem with the pack or the repository's
   // harnesses, and it should be reported rather than shown as an empty list.
   if (!harnesses.length) {
@@ -326,21 +320,8 @@ function packageHarnesses(
     harnesses,
     warnings,
     refused: false,
-    unavailable: whyUnavailable(harnesses, tokens, known),
+    unavailable: harnesses.length ? undefined : 'narrowed',
   };
-}
-
-/**
- * No known target at all is the hub's gap; known ones left out is the
- * repository's own list.
- */
-function whyUnavailable(
-  offered: string[],
-  declared: string[],
-  known: string[],
-): InstallUnavailable | undefined {
-  if (offered.length) return undefined;
-  return declared.every(t => !known.includes(t)) ? 'unknown-target' : 'narrowed';
 }
 
 /**
@@ -366,6 +347,7 @@ const MANIFEST_TARGET_ALIASES: Record<string, string> = { vscode: 'copilot' };
 function declaredTargets(apm: Record<string, unknown>): {
   tokens?: string[];
   error?: string;
+  cause?: InstallUnavailable;
 } {
   const hasTargets = 'targets' in apm;
   const hasTarget = 'target' in apm;
@@ -391,7 +373,23 @@ function declaredTargets(apm: Record<string, unknown>): {
     return hasTargets ? { error: 'has an empty targets list' } : {};
   }
   if (tokens.includes('all')) return {};
-  return { tokens: tokens.map(t => MANIFEST_TARGET_ALIASES[t] ?? t) };
+  const declared = tokens.map(t => MANIFEST_TARGET_ALIASES[t] ?? t);
+
+  // APM raises on any token it does not accept and refuses the whole
+  // apm.yml, so one unknown target means nothing in the pack installs, the
+  // known ones included. The list is APM_TARGETS_VERSION's: a target newer
+  // than that is the hub's gap to fill, and the warning says so.
+  const known = HARNESSES.map(h => h.id) as string[];
+  const unknown = declared.filter(t => !known.includes(t));
+  if (unknown.length) {
+    return {
+      error: `declares ${unknown.join(
+        ', ',
+      )}, which APM ${APM_TARGETS_VERSION} does not accept (or is newer than this hub's list)`,
+      cause: 'unknown-target',
+    };
+  }
+  return { tokens: declared };
 }
 
 /**

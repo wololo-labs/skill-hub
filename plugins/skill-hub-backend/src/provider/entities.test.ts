@@ -515,10 +515,25 @@ publish:
       expect(warnings).toEqual([]);
     });
 
-    it('offers the targets it knows and names the ones it does not', async () => {
-      const { system, warnings } = await pack('name: p\ntargets: [claude, brand-new]\n');
-      expect(readHarnesses(system)).toEqual(['claude']);
+    it('refuses the whole pack for one unknown target, as APM does, and offers nothing', async () => {
+      // APM 0.33.0 raises on any token it does not accept and refuses the
+      // whole apm.yml, so claude here installs nothing either.
+      const { system, skill, warnings } = await pack(
+        'name: p\ntargets: [claude, brand-new]\n',
+      );
+      for (const entity of [system, skill]) {
+        expect(readHarnesses(entity)).toEqual([]);
+        expect(readInstallCommands(entity)).toEqual({});
+        expect(readInstallUnavailable(entity)).toBe('unknown-target');
+      }
       expect(warnings).toEqual([expect.stringContaining('brand-new')]);
+    });
+
+    it('gives no codex command for an MCP server of a pack APM refuses over an unknown target', async () => {
+      const { entities } = await pack(
+        'name: p\ntargets: [claude, brand-new]\ndependencies:\n  mcp:\n    - name: runner\n',
+      );
+      expect(readHarnesses(find(entities, 'API', 'runner')!)).toEqual([]);
     });
 
     describe('why a pack offers no command', () => {
@@ -550,11 +565,10 @@ publish:
       });
     });
 
-    it('reports both the unknown target and the pack left with no command', async () => {
+    it('reports an unknown target once, as the reason the pack is refused', async () => {
       const { warnings } = await pack('name: p\ntargets: [not-a-harness]\n');
       expect(warnings).toEqual([
-        expect.stringContaining('not-a-harness'),
-        expect.stringContaining('no install command'),
+        expect.stringMatching(/not-a-harness.*APM 0\.33\.0.*no install command/),
       ]);
     });
 

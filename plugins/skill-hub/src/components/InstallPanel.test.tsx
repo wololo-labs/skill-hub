@@ -38,7 +38,7 @@ describe('an asset with no install command says which cause applies', () => {
 
   it('blames the hub when the target is one it has not been taught', async () => {
     const text = await render('unknown-target');
-    expect(text).toMatch(/hub does not know/);
+    expect(text).toMatch(/does not accept/);
     expect(text).toMatch(/APM 0\.33\.0/);
     expect(text).not.toMatch(/pack declares something APM would refuse/);
   });

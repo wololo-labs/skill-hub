@@ -200,7 +200,7 @@ const noCommandCause = (cause: InstallUnavailable | undefined): string => {
     case 'narrowed':
       return "The repository's own harnesses list leaves out every target its pack declares. Add one to that list to offer it.";
     case 'unknown-target':
-      return `Every target its pack declares is one this hub does not know. The hub's list follows APM ${APM_TARGETS_VERSION}, so a newer target is the hub's gap to fill, not a mistake in the pack.`;
+      return `Its pack declares a target APM ${APM_TARGETS_VERSION} does not accept, and APM refuses the whole pack over one. If the target is newer than that, the hub's list is the gap to fill, not the pack.`;
     case 'path':
       return 'Its path contains characters that would not survive being pasted into a shell.';
     default:
