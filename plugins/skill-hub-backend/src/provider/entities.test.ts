@@ -5,9 +5,12 @@ import {
   ANNOTATION_EVAL_SCORE_REF,
   ANNOTATION_SOURCE_LOCATION,
   readEvalScore,
+  scoreState,
   readInstallCommands,
   isInstallable,
 } from '@internal/plugin-skill-hub-common';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { RepoRef, TreeEntry } from '../github/GithubAssetReader';
 import { buildEntities, publishedPaths } from './entities';
 import { parseManifest } from './manifest';
@@ -246,6 +249,87 @@ publish:
     });
   });
 
+  describe('the statistics in the gate report', () => {
+    const build = async (report: string) => {
+      const { entities } = await buildEntities({
+        repo: REPO,
+        commitSha: SHA,
+        manifest: parseManifest(
+          'owner: team\npublish:\n  packages: packages/*/apm.yml\n',
+        ),
+        ...repository({
+          'packages/qe-agent-pack/apm.yml': 'name: qe-agent-pack\n',
+          'packages/qe-agent-pack/eval-gate-report.json': report,
+        }),
+      });
+      return entities[0];
+    };
+
+    it('reads the real test-writer-pack report as a pass with no demonstrated gain', async () => {
+      // The gate report ainb-toolkit published for packages/test-writer-pack
+      // on f/test-writer-pack, verbatim.
+      const real = readFileSync(
+        join(__dirname, '__fixtures__/test-writer-pack.eval-gate-report.json'),
+        'utf8',
+      );
+      const entity = await build(real);
+      const score = readEvalScore(entity)!;
+
+      expect(score.measuredCommit).toBe(
+        'bd06dab3518ef4da02cda155d6310de176d0e3e1',
+      );
+      expect(score.sourceVisibility).toBe('internal');
+      expect(score.stats).toMatchObject({
+        ciLow: -0.01022395119096374,
+        ciHigh: 0.010485766042045853,
+        confidence: 0.95,
+        significantImprovement: false,
+        significantRegression: false,
+      });
+      expect(scoreState(score)).toBe('no-gain');
+      expect(isInstallable(entity)).toBe(true);
+    });
+
+    it('reads a significant improvement as a gain', async () => {
+      const entity = await build(
+        JSON.stringify({
+          verdict: 'pass',
+          signals: [],
+          stats: { significant_improvement: true, ci_low: 0.02, ci_high: 0.09 },
+        }),
+      );
+      expect(scoreState(readEvalScore(entity))).toBe('gain');
+    });
+
+    it('reads a regression verdict as regressed and not installable', async () => {
+      const entity = await build(
+        JSON.stringify({ verdict: 'regression', signals: [] }),
+      );
+      expect(scoreState(readEvalScore(entity))).toBe('regressed');
+      expect(isInstallable(entity)).toBe(false);
+    });
+
+    it('does not invent a gain from a report that carries no statistics', async () => {
+      const entity = await build(
+        JSON.stringify({ verdict: 'pass', signals: [] }),
+      );
+      expect(readEvalScore(entity)!.stats).toBeUndefined();
+      expect(scoreState(readEvalScore(entity))).toBe('no-gain');
+    });
+
+    it('ignores a statistic of the wrong type rather than trusting it', async () => {
+      const entity = await build(
+        JSON.stringify({
+          verdict: 'pass',
+          signals: [],
+          stats: { significant_improvement: 'true', ci_low: 'low' },
+        }),
+      );
+      expect(readEvalScore(entity)!.stats).toBeUndefined();
+      expect(scoreState(readEvalScore(entity))).toBe('no-gain');
+    });
+  });
+
   it('keeps the install blocked when the gate did not pass', async () => {
     const report = (verdict: string) =>
       JSON.stringify({ verdict, signals: [], subject: { commit: 'd'.repeat(40) } });
@@ -287,9 +371,7 @@ publish:
     const { entities } = await buildEntities({
       repo: REPO,
       commitSha: SHA,
-      manifest: parseManifest(
-        'owner: team\npublish:\n  packages: packages/*/apm.yml\n',
-      ),
+      manifest: parseManifest('owner: team\npublish:\n  packages: packages/*/apm.yml\n'),
       ...repository({
         'packages/qe-agent-pack/apm.yml': 'name: qe-agent-pack\n',
         'packages/qe-agent-pack/catalog-info.yaml': catalogInfo,
@@ -349,7 +431,9 @@ publish:
     const { entities } = await buildEntities({
       repo: REPO,
       commitSha: SHA,
-      manifest: parseManifest('owner: team\npublish:\n  packages: packages/*/apm.yml\n'),
+      manifest: parseManifest(
+        'owner: team\npublish:\n  packages: packages/*/apm.yml\n',
+      ),
       ...repository({
         'packages/broken-pack/apm.yml': 'name: broken-pack\nversion: 0.1.0\n',
         'packages/broken-pack/eval-score.json': JSON.stringify({

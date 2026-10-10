@@ -142,6 +142,7 @@ function readGateReport(reportJson: string): EvalScore | undefined {
     sourceVisibility?: unknown;
     subject?: { commit?: unknown } | null;
     signals?: unknown;
+    stats?: Record<string, unknown> | null;
   };
   try {
     report = JSON.parse(reportJson);
@@ -177,6 +178,25 @@ function readGateReport(reportJson: string): EvalScore | undefined {
   const text = (value: unknown) =>
     typeof value === 'string' && value ? value : undefined;
   const commit = text(report.subject?.commit);
+  const num = (value: unknown) =>
+    typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+  const flag = (value: unknown) =>
+    typeof value === 'boolean' ? value : undefined;
+  const raw = typeof report.stats === 'object' ? report.stats : null;
+  // Only what the report states is carried. A flag the report does not set
+  // stays unset, so a missing `significant_improvement` can never read as one.
+  const stats = raw
+    ? Object.fromEntries(
+        Object.entries({
+          meanDelta: num(raw.mean_delta),
+          ciLow: num(raw.ci_low),
+          ciHigh: num(raw.ci_high),
+          confidence: num(raw.confidence),
+          significantImprovement: flag(raw.significant_improvement),
+          significantRegression: flag(raw.significant_regression),
+        }).filter(([, v]) => v !== undefined),
+      )
+    : {};
 
   return {
     // `pass` is the only verdict that opens the install gate, and every other
@@ -187,6 +207,7 @@ function readGateReport(reportJson: string): EvalScore | undefined {
     source: text(report.source),
     sourceVisibility: text(report.sourceVisibility),
     ...(Object.keys(metrics).length ? { metrics } : {}),
+    ...(Object.keys(stats).length ? { stats } : {}),
     ...(commit && /^[0-9a-f]{7,40}$/.test(commit)
       ? { measuredCommit: commit }
       : {}),
