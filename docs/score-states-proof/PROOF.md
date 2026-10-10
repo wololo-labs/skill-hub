@@ -17,7 +17,7 @@ was available in this environment.
 
 What each shows:
 
-- Measured gain: badge "measured gain" with the change over the model alone and its interval, Install offered. The browse list shows one Score facet and one header count per state.
+- Measured gain: badge "measured gain" with the change over the gate's baseline and its interval, when the report gives a confidence, Install offered. The browse list shows one Score facet and one header count per state.
 - No measured gain: dashed badge "no measured gain over the gate's baseline",
   Install offered with the same sentence as a visible warning.
 - Regressed: badge "regressed", no harness picker and no command. The provider publishes no command for it either, so the block is not only in the page.
