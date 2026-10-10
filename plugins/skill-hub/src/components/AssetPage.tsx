@@ -24,7 +24,11 @@ import { useRouteRef } from '@backstage/frontend-plugin-api';
 import { catalogApiRef } from '@backstage/plugin-catalog-react';
 import useAsyncRetry from 'react-use/esm/useAsyncRetry';
 import useAsync from 'react-use/esm/useAsync';
-import { describeChange, isScoreStale } from '@internal/plugin-skill-hub-common';
+import {
+  describeChange,
+  describeVerdict,
+  isScoreStale,
+} from '@internal/plugin-skill-hub-common';
 import { toAsset } from '../model';
 import { skillHubApiRef } from '../api';
 import { rootRouteRef } from '../plugin';
@@ -375,7 +379,7 @@ export const AssetPage = () => {
                 <>
                   <Table size="small">
                     <TableBody>
-                      <Row label="Verdict" value={score.verdict ?? 'recorded'} />
+                      <Row label="Verdict" value={describeVerdict(score)} />
                       {score.recorded && (
                         <Row label="Recorded" value={score.recorded} />
                       )}

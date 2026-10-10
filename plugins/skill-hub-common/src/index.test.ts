@@ -1,6 +1,7 @@
 import {
   EvalScore,
   describeChange,
+  describeVerdict,
   isScoreStale,
   passedGate,
   readEvalScore,
@@ -237,5 +238,12 @@ describe('measuredCommit', () => {
 
   it('does not call a score stale on a pinned commit too short to compare', () => {
     expect(isScoreStale(read('abcdef1'), 'a')).toBe(false);
+  });
+});
+
+describe('describeVerdict', () => {
+  it('says the verdict is missing in the same words the badge uses', () => {
+    expect(describeVerdict({})).toBe('verdict missing');
+    expect(describeVerdict({ verdict: 'pass' })).toBe('PASS');
   });
 });

@@ -1,6 +1,7 @@
 import { Tooltip, makeStyles } from '@material-ui/core';
 import {
   EvalScore,
+  describeVerdict,
   isScoreStale,
   scoreState,
 } from '@internal/plugin-skill-hub-common';
@@ -134,7 +135,7 @@ export const ScoreBadge = ({
     gain: 'measured gain',
     'no-gain': 'no measured gain over the model alone',
     regressed: 'regressed',
-    failed: verdict ?? 'verdict missing',
+    failed: describeVerdict(score),
     unscored: 'unscored',
   }[state];
   const style = {

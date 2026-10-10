@@ -94,6 +94,11 @@ export function scoreState(score: EvalScore | undefined): ScoreState {
   return score.stats?.significantImprovement === true ? 'gain' : 'no-gain';
 }
 
+/** The verdict as shown, or the plain fact that the report has none. */
+export function describeVerdict(score: EvalScore): string {
+  return score.verdict?.toUpperCase() ?? 'verdict missing';
+}
+
 /**
  * The change over the model alone with its interval, for the places that
  * spell it out. A missing mean is said to be unrecorded, never left blank.
