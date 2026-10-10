@@ -587,14 +587,16 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
   };
 
   // The commands, and when there are none, the reason, so a reader is told
-  // which problem they have rather than a list of possible ones.
+  // which problem they have rather than a list of possible ones. An asset
+  // without a passing gate has no command because of its score, which the
+  // score annotation already says, so no other cause is recorded for it.
   const installAnnotations = (
     commands: InstallCommands,
     pkg: PackageInfo | undefined,
     offered: string[],
   ) => ({
     [ANNOTATION_INSTALL]: JSON.stringify(commands),
-    ...(Object.keys(commands).length
+    ...(Object.keys(commands).length || !passedGate(pkg?.score)
       ? {}
       : {
           [ANNOTATION_INSTALL_UNAVAILABLE]:

@@ -722,6 +722,21 @@ publish:
       );
     });
 
+    it('records no other cause for a pack whose gate has not passed', async () => {
+      // The score is why there is no command, and the score says so itself.
+      const { entities } = await buildEntities({
+        repo: REPO,
+        commitSha: SHA,
+        manifest: parseManifest(
+          'owner: team\npublish:\n  packages: packages/*/apm.yml\n',
+        ),
+        ...repository({ 'packages/p/apm.yml': 'name: p\nversion: 0.1.0\n' }),
+      });
+      const system = find(entities, 'System', 'p')!;
+      expect(readInstallCommands(system)).toEqual({});
+      expect(readInstallUnavailable(system)).toBeUndefined();
+    });
+
     it('does not give codex to a loose MCP file inside the pack', async () => {
       // The codex evidence covers servers the pack declares under
       // dependencies.mcp. A file the repository merely publishes from inside
