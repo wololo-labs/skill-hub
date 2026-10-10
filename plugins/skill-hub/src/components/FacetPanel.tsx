@@ -1,5 +1,5 @@
 import { Box, Button, Typography, makeStyles } from '@material-ui/core';
-import { Asset, Facets, facetCounts } from '../model';
+import { Asset, Facets, SCORE_STATE_LABEL, facetCounts } from '../model';
 
 const useStyles = makeStyles(theme => ({
   root: {
@@ -191,7 +191,11 @@ export const FacetPanel = ({ assets, facets, onChange }: FacetPanelProps) => {
                       <span className={classes.tick} aria-hidden="true">
                         {on ? '✓' : ''}
                       </span>
-                      <span className={classes.name}>{value}</span>
+                      <span className={classes.name}>
+                        {group.key === 'score'
+                          ? SCORE_STATE_LABEL[value as keyof typeof SCORE_STATE_LABEL]
+                          : value}
+                      </span>
                     </span>
                     <span className={classes.count}>{count}</span>
                   </button>

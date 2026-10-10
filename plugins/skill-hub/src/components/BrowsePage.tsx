@@ -32,7 +32,15 @@ import {
 import { parseEntityRef } from '@backstage/catalog-model';
 import useAsync from 'react-use/esm/useAsync';
 import { ANNOTATION_HARNESSES } from '@internal/plugin-skill-hub-common';
-import { Asset, EMPTY_FACETS, Facets, toAsset, visibleAssets } from '../model';
+import {
+  Asset,
+  EMPTY_FACETS,
+  Facets,
+  SCORE_STATE_LABEL,
+  scoreStateOf,
+  toAsset,
+  visibleAssets,
+} from '../model';
 import { assetRouteRef } from '../plugin';
 import { AssetRow } from './AssetRow';
 import { FacetPanel } from './FacetPanel';
@@ -185,10 +193,15 @@ export const BrowsePage = () => {
         subtitle="Every agent asset the estate publishes, with where it came from and what it scored"
       >
         <HeaderLabel label="Assets" value={loading ? '—' : assets.length} />
-        <HeaderLabel
-          label="Scored"
-          value={loading ? '—' : assets.filter(a => a.score).length}
-        />
+        {(['gain', 'no-gain', 'regressed', 'unscored'] as const).map(state => (
+          <HeaderLabel
+            key={state}
+            label={SCORE_STATE_LABEL[state]}
+            value={
+              loading ? '—' : assets.filter(a => scoreStateOf(a) === state).length
+            }
+          />
+        ))}
       </Header>
 
       <Content>
