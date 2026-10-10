@@ -36,11 +36,10 @@ import {
   Asset,
   EMPTY_FACETS,
   Facets,
-  SCORE_STATE_LABEL,
-  countByState,
   toAsset,
   visibleAssets,
 } from '../model';
+import { ScoreCounts } from './ScoreCounts';
 import { assetRouteRef } from '../plugin';
 import { AssetRow } from './AssetRow';
 import { FacetPanel } from './FacetPanel';
@@ -178,7 +177,6 @@ export const BrowsePage = () => {
     () => visibleAssets(assets, deferredFacets),
     [assets, deferredFacets],
   );
-  const counts = useMemo(() => countByState(assets), [assets]);
   const activeFacets =
     facets.type.length +
     facets.score.length +
@@ -193,16 +191,8 @@ export const BrowsePage = () => {
         title="skill hub"
         subtitle="Every agent asset the estate publishes, with where it came from and what it scored"
       >
-        <HeaderLabel label="Assets" value={loading ? '...' : assets.length} />
-        {(
-          ['gain', 'no-gain', 'regressed', 'failed', 'unscored'] as const
-        ).map(state => (
-          <HeaderLabel
-            key={state}
-            label={SCORE_STATE_LABEL[state]}
-            value={loading ? '...' : counts[state]}
-          />
-        ))}
+        <HeaderLabel label="Assets" value={loading ? '...' : String(assets.length)} />
+        <ScoreCounts assets={assets} loading={loading} />
       </Header>
 
       <Content>
