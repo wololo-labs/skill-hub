@@ -153,21 +153,27 @@ function sanitizeScore(raw: Record<string, unknown>): EvalScore {
       }
     }
   }
-  const s = (typeof raw.stats === 'object' && raw.stats) || {};
+  // The gate writes snake_case and a hand-written or generated catalogue
+  // carries it through, so both spellings are read, here and nowhere else.
+  const s = ((typeof raw.stats === 'object' && raw.stats) || {}) as Record<
+    string,
+    unknown
+  >;
+  const either = (camel: string, snake: string) => s[camel] ?? s[snake];
+  const flag = (value: unknown) =>
+    typeof value === 'boolean' ? value : undefined;
   const stats = Object.fromEntries(
     Object.entries({
-      meanDelta: finite((s as any).meanDelta),
-      ciLow: finite((s as any).ciLow),
-      ciHigh: finite((s as any).ciHigh),
-      confidence: finite((s as any).confidence),
-      significantImprovement:
-        typeof (s as any).significantImprovement === 'boolean'
-          ? (s as any).significantImprovement
-          : undefined,
-      significantRegression:
-        typeof (s as any).significantRegression === 'boolean'
-          ? (s as any).significantRegression
-          : undefined,
+      meanDelta: finite(either('meanDelta', 'mean_delta')),
+      ciLow: finite(either('ciLow', 'ci_low')),
+      ciHigh: finite(either('ciHigh', 'ci_high')),
+      confidence: finite(s.confidence),
+      significantImprovement: flag(
+        either('significantImprovement', 'significant_improvement'),
+      ),
+      significantRegression: flag(
+        either('significantRegression', 'significant_regression'),
+      ),
     }).filter(([, v]) => v !== undefined),
   ) as EvalStats;
   const commit =

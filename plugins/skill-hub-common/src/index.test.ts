@@ -154,3 +154,57 @@ describe('one definition of a passed gate', () => {
     }
   });
 });
+
+describe('a score whose statistics are written in snake case', () => {
+  // The gate report writes snake_case, and a catalogue file or an
+  // eval-score.json carries it through untouched.
+  const entityWith = (raw: unknown) =>
+    ({
+      apiVersion: 'backstage.io/v1alpha1',
+      kind: 'System',
+      metadata: {
+        name: 'x',
+        annotations: { 'wololo.dev/eval-score': JSON.stringify(raw) },
+      },
+    }) as any;
+
+  it('reads a significant regression, so a measurably worse asset is not installable', () => {
+    const score = readEvalScore(
+      entityWith({
+        verdict: 'PASS',
+        stats: { significant_regression: true, significant_improvement: false },
+      }),
+    );
+    expect(scoreState(score)).toBe('regressed');
+    expect(passedGate(score)).toBe(false);
+  });
+
+  it('reads every statistic in either spelling', () => {
+    const snake = readEvalScore(
+      entityWith({
+        verdict: 'PASS',
+        stats: {
+          mean_delta: 0.05,
+          ci_low: 0.02,
+          ci_high: 0.08,
+          confidence: 0.95,
+          significant_improvement: true,
+        },
+      }),
+    )!;
+    const camel = readEvalScore(
+      entityWith({
+        verdict: 'PASS',
+        stats: {
+          meanDelta: 0.05,
+          ciLow: 0.02,
+          ciHigh: 0.08,
+          confidence: 0.95,
+          significantImprovement: true,
+        },
+      }),
+    )!;
+    expect(snake.stats).toEqual(camel.stats);
+    expect(scoreState(snake)).toBe('gain');
+  });
+});

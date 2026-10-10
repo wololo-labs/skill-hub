@@ -249,6 +249,25 @@ publish:
     });
   });
 
+  it('keeps a measurably worse asset uninstallable when its score came from eval-score.json', async () => {
+    const { entities } = await buildEntities({
+      repo: REPO,
+      commitSha: SHA,
+      manifest: parseManifest(
+        'owner: team\npublish:\n  packages: packages/*/apm.yml\n',
+      ),
+      ...repository({
+        'packages/p/apm.yml': 'name: p\n',
+        'packages/p/eval-score.json': JSON.stringify({
+          verdict: 'PASS',
+          stats: { significant_regression: true },
+        }),
+      }),
+    });
+    expect(scoreState(readEvalScore(entities[0]))).toBe('regressed');
+    expect(isInstallable(entities[0])).toBe(false);
+  });
+
   describe('the statistics in the gate report', () => {
     const build = async (report: string) => {
       const { entities } = await buildEntities({
