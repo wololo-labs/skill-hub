@@ -2,7 +2,12 @@ import { useRef, useState } from 'react';
 import { Box, Typography, makeStyles } from '@material-ui/core';
 import { InfoCard, Link } from '@backstage/core-components';
 import { useApi } from '@backstage/core-plugin-api';
-import { APM_TARGETS_VERSION, HARNESSES, passedGate } from '@internal/plugin-skill-hub-common';
+import {
+  APM_TARGETS_VERSION,
+  HARNESSES,
+  InstallUnavailable,
+  passedGate,
+} from '@internal/plugin-skill-hub-common';
 import { Asset } from '../model';
 import { skillHubApiRef } from '../api';
 import { CopyCommand } from './CopyCommand';
@@ -183,6 +188,26 @@ function blocked(failed: boolean, passed: boolean): { title: string; body: strin
   };
 }
 
+/**
+ * Which problem there is, not a list of the possible ones. The provider records
+ * the cause beside the empty command list, so a pack that is fine is never
+ * blamed for the hub being behind, and the reverse.
+ */
+const noCommandCause = (cause: InstallUnavailable | undefined): string => {
+  switch (cause) {
+    case 'refused':
+      return 'Its pack declares something APM would refuse, or its apm.yml cannot be read, so nothing in it can be installed until the pack is fixed. The sync warnings name the problem.';
+    case 'narrowed':
+      return "The repository's own harnesses list leaves out every target its pack declares. Add one to that list to offer it.";
+    case 'unknown-target':
+      return `Every target its pack declares is one this hub does not know. The hub's list follows APM ${APM_TARGETS_VERSION}, so a newer target is the hub's gap to fill, not a mistake in the pack.`;
+    case 'path':
+      return 'Its path contains characters that would not survive being pasted into a shell.';
+    default:
+      return 'The sync warnings say why.';
+  }
+};
+
 export const InstallPanel = ({ asset, stale = false }: InstallPanelProps) => {
   const classes = useStyles();
   const api = useApi(skillHubApiRef);
@@ -198,12 +223,8 @@ export const InstallPanel = ({ asset, stale = false }: InstallPanelProps) => {
     return (
       <InfoCard title="Install">
         <Typography className={classes.body}>
-          This asset publishes no install command. That happens when its path
-          contains characters that would not survive being pasted into a shell,
-          or when none of the targets its pack declares is one this hub offers.
-          The hub's list follows APM {APM_TARGETS_VERSION}, so a target newer
-          than that is the hub's gap to fill, not a mistake in the pack. The
-          sync warnings name the pack and the targets.
+          This asset publishes no install command.{' '}
+          {noCommandCause(asset.installUnavailable)}
         </Typography>
       </InfoCard>
     );

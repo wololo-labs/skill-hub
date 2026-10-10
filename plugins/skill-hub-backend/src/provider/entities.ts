@@ -10,11 +10,13 @@ import {
   ANNOTATION_EVAL_SCORE_REF,
   ANNOTATION_HARNESSES,
   ANNOTATION_INSTALL,
+  ANNOTATION_INSTALL_UNAVAILABLE,
   ANNOTATION_REPO,
   ANNOTATION_SOURCE_LOCATION,
   EvalScore,
   HARNESSES,
   InstallCommands,
+  InstallUnavailable,
 } from '@internal/plugin-skill-hub-common';
 import { RepoRef, TreeEntry } from '../github/GithubAssetReader';
 import {
@@ -55,6 +57,8 @@ interface PackageInfo {
   harnesses: string[];
   /** APM would refuse to read this pack at all, so nothing in it installs. */
   refused: boolean;
+  /** Why the pack offers no command, when it offers none. */
+  unavailable?: InstallUnavailable;
   mcp: Array<Record<string, unknown>>;
 }
 
@@ -267,7 +271,12 @@ function packageHarnesses(
   manifest: AgentAssetsManifest,
   dir: string,
   refusal?: string,
-): { harnesses: string[]; warnings: string[]; refused: boolean } {
+): {
+  harnesses: string[];
+  warnings: string[];
+  refused: boolean;
+  unavailable?: InstallUnavailable;
+} {
   const { tokens, error: declarationError } = declaredTargets(apm);
   const error = refusal ?? declarationError;
   const where = dir || '(repository root)';
@@ -278,6 +287,7 @@ function packageHarnesses(
     return {
       harnesses: [],
       refused: true,
+      unavailable: 'refused',
       warnings: [
         `${where}: apm.yml ${error}, so no install command is offered`,
       ],
@@ -312,7 +322,25 @@ function packageHarnesses(
       )}, none of which can be offered here, so no install command is offered`,
     );
   }
-  return { harnesses, warnings, refused: false };
+  return {
+    harnesses,
+    warnings,
+    refused: false,
+    unavailable: whyUnavailable(harnesses, tokens, known),
+  };
+}
+
+/**
+ * No known target at all is the hub's gap; known ones left out is the
+ * repository's own list.
+ */
+function whyUnavailable(
+  offered: string[],
+  declared: string[],
+  known: string[],
+): InstallUnavailable | undefined {
+  if (offered.length) return undefined;
+  return declared.every(t => !known.includes(t)) ? 'unknown-target' : 'narrowed';
 }
 
 /**
@@ -441,6 +469,22 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
     );
   };
 
+  // The commands, and when there are none, the reason, so a reader is told
+  // which problem they have rather than a list of possible ones.
+  const installAnnotations = (
+    commands: InstallCommands,
+    pkg: PackageInfo | undefined,
+    offered: string[],
+  ) => ({
+    [ANNOTATION_INSTALL]: JSON.stringify(commands),
+    ...(Object.keys(commands).length
+      ? {}
+      : {
+          [ANNOTATION_INSTALL_UNAVAILABLE]:
+            pkg?.unavailable ?? (offered.length ? 'path' : 'narrowed'),
+        }),
+  });
+
   const base = (
     path: string,
     kind: 'blob' | 'tree',
@@ -513,6 +557,7 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
       score,
       harnesses: declared.harnesses,
       refused: declared.refused,
+      unavailable: declared.unavailable,
       mcp,
     };
     packages.push(info);
@@ -543,11 +588,13 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
             ? { [ANNOTATION_APM_PACKAGE]: `${name}@${info.version}` }
             : {}),
           ...(score ? { [ANNOTATION_EVAL_SCORE]: JSON.stringify(score) } : {}),
-          [ANNOTATION_INSTALL]: JSON.stringify(
+          ...installAnnotations(
             installCommands(repo, commitSha, info.harnesses, {
               kind: 'package',
               dir,
             }),
+            info,
+            info.harnesses,
           ),
         },
         links: sourceLink(dir, 'tree'),
@@ -578,11 +625,13 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
               ? { [ANNOTATION_EVAL_SCORE]: JSON.stringify(score) }
               : {}),
             [ANNOTATION_EVAL_SCORE_REF]: `system:${namespace}/${info.name}`,
-            [ANNOTATION_INSTALL]: JSON.stringify(
+            ...installAnnotations(
               installCommands(repo, commitSha, mcpHarnessesOf(info), {
                 kind: 'package',
                 dir,
               }),
+              info,
+              mcpHarnessesOf(info),
             ),
           },
           links: sourceLink(path, 'blob'),
@@ -667,13 +716,15 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
         annotations: {
           ...base(path, 'blob', path, harnesses),
           ...scoreAnnotations(pkg, namespace),
-          [ANNOTATION_INSTALL]: JSON.stringify(
+          ...installAnnotations(
             installCommands(
               repo,
               commitSha,
               harnesses,
               installTarget(pkg, path),
             ),
+            pkg,
+            harnesses,
           ),
         },
         links: sourceLink(path, 'blob'),
@@ -727,13 +778,15 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
           annotations: {
             ...base(assetPath, isDirectoryAsset ? 'tree' : 'blob', path, harnesses),
             ...scoreAnnotations(pkg, namespace),
-            [ANNOTATION_INSTALL]: JSON.stringify(
+            ...installAnnotations(
               installCommands(
                 repo,
                 commitSha,
                 harnesses,
                 installTarget(pkg, assetPath),
               ),
+              pkg,
+              harnesses,
             ),
           },
           links: sourceLink(assetPath, isDirectoryAsset ? 'tree' : 'blob'),

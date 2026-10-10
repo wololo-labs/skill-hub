@@ -10,6 +10,8 @@ export const ANNOTATION_EVAL_SCORE = 'wololo.dev/eval-score';
 export const ANNOTATION_EVAL_SCORE_REF = 'wololo.dev/eval-score-ref';
 export const ANNOTATION_HARNESSES = 'wololo.dev/harnesses';
 export const ANNOTATION_INSTALL = 'wololo.dev/install';
+/** Why an asset offers no install command, when it offers none. */
+export const ANNOTATION_INSTALL_UNAVAILABLE = 'wololo.dev/install-unavailable';
 export const ANNOTATION_REPO = 'wololo.dev/repo';
 export const ANNOTATION_COMMIT = 'wololo.dev/commit';
 export const ANNOTATION_ASSET_PATH = 'wololo.dev/asset-path';
@@ -67,6 +69,30 @@ export interface EvalScore {
   metrics?: Record<string, EvalMetric>;
   /** The commit the score was measured at, when the publisher records one. */
   measuredCommit?: string;
+}
+
+/**
+ * Why there is no install command: `refused` APM would not read the pack's
+ * manifest, `narrowed` the repository's own harnesses list leaves out every
+ * target the pack declares, `unknown-target` the pack declares only targets
+ * this hub has not been taught, `path` the path would not survive a shell.
+ */
+export type InstallUnavailable =
+  | 'refused'
+  | 'narrowed'
+  | 'unknown-target'
+  | 'path';
+
+export function readInstallUnavailable(
+  entity: Entity,
+): InstallUnavailable | undefined {
+  const value = annotation(entity, ANNOTATION_INSTALL_UNAVAILABLE);
+  return value === 'refused' ||
+    value === 'narrowed' ||
+    value === 'unknown-target' ||
+    value === 'path'
+    ? value
+    : undefined;
 }
 
 /** Install command per harness, keyed by harness id. */

