@@ -356,6 +356,26 @@ publish:
       });
     });
 
+    it('lets an owner who lists cursor opt a cursor pack in', async () => {
+      const { system } = await pack(
+        'name: p\ntargets: [claude, cursor]\n',
+        'harnesses: [claude, cursor]\n',
+      );
+      expect(readHarnesses(system)).toEqual(['claude', 'cursor']);
+    });
+
+    it('offers a standalone asset only what ainb can install it to', async () => {
+      const { entities } = await buildEntities({
+        repo: REPO,
+        commitSha: SHA,
+        manifest: parseManifest(
+          'owner: team\nharnesses: [claude, cursor]\npublish:\n  skills: skills/*/SKILL.md\n',
+        ),
+        ...repository({ 'skills/s/SKILL.md': '---\ndescription: d\n---\n' }),
+      });
+      expect(readHarnesses(find(entities, 'AiResource', 's')!)).toEqual(['claude']);
+    });
+
     it('does not give codex to a loose MCP file inside the pack', async () => {
       // The codex evidence covers servers the pack declares under
       // dependencies.mcp. A file the repository merely publishes from inside

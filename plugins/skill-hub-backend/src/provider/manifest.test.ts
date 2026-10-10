@@ -1,4 +1,3 @@
-import { HARNESSES } from '@internal/plugin-skill-hub-common';
 import { ManifestError, parseManifest } from './manifest';
 
 describe('parseManifest', () => {
@@ -62,15 +61,23 @@ publish:
 });
 
 describe('which harnesses a repository manifest may name', () => {
-  it('are the ones flagged as manifest harnesses, wherever they sit in the list', () => {
-    expect(
-      HARNESSES.filter(h => 'manifest' in h && h.manifest).map(h => h.id),
-    ).toEqual(['claude', 'copilot', 'codex']);
+  it('may name every target the hub knows, so an owner can opt a pack in', () => {
+    const manifest = parseManifest(
+      'owner: t\nharnesses: [claude, cursor]\npublish:\n  skills: s/*\n',
+    );
+    expect(manifest.harnesses).toEqual(['claude', 'cursor']);
+    expect(manifest.harnessesExplicit).toBe(true);
   });
 
-  it('refuses a harness that is not flagged, and says which are allowed', () => {
+  it('defaults to the three standalone assets can be installed to', () => {
+    const manifest = parseManifest('owner: t\npublish:\n  skills: s/*\n');
+    expect(manifest.harnesses).toEqual(['claude', 'copilot', 'codex']);
+    expect(manifest.harnessesExplicit).toBe(false);
+  });
+
+  it('still refuses a name the hub does not know, and lists the ones it does', () => {
     expect(() =>
-      parseManifest('owner: t\nharnesses: [cursor]\npublish:\n  skills: s/*\n'),
-    ).toThrow(/unknown harness cursor, expected one of claude, copilot, codex/);
+      parseManifest('owner: t\nharnesses: [nonsense]\npublish:\n  skills: s/*\n'),
+    ).toThrow(/unknown harness nonsense, expected one of claude, copilot, codex, cursor/);
   });
 });

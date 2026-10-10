@@ -21,6 +21,7 @@ import {
   AgentAssetsManifest,
   AssetKind,
   SPEC_TYPE_BY_KIND,
+  STANDALONE_HARNESSES,
 } from './manifest';
 import { describeMarkdown, describePython } from './describe';
 import { entityName, ownerRef, repoNamespace } from './names';
@@ -616,7 +617,9 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
   // pack is; a standalone asset takes the repository manifest's harnesses and
   // installs as itself. One place decides both, so the two cannot drift.
   const harnessesOf = (pkg: PackageInfo | undefined): string[] =>
-    pkg?.harnesses ?? manifest.harnesses;
+    pkg
+      ? pkg.harnesses
+      : manifest.harnesses.filter(h => STANDALONE_HARNESSES.includes(h));
   const installTarget = (pkg: PackageInfo | undefined, path: string) =>
     pkg
       ? ({ kind: 'package', dir: pkg.dir } as const)

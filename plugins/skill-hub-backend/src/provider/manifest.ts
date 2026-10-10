@@ -38,7 +38,7 @@ export interface AgentAssetsManifest {
   owner: string;
   /** Optional system every asset belongs to, unless a pack claims it first. */
   system?: string;
-  /** Harnesses these assets target. Defaults to all three. */
+  /** Harnesses these assets target. Defaults to the three ainb installs to. */
   harnesses: string[];
   /**
    * Whether the repository wrote `harnesses:` itself. A written list is a
@@ -57,8 +57,10 @@ export interface AgentAssetsManifest {
  */
 export class ManifestError extends Error {}
 
-const KNOWN_HARNESSES: string[] = HARNESSES.filter(
-  h => 'manifest' in h && h.manifest,
+const KNOWN_HARNESSES: string[] = HARNESSES.map(h => h.id);
+/** What a standalone asset installs to when the manifest names nothing. */
+export const STANDALONE_HARNESSES: string[] = HARNESSES.filter(
+  h => 'standalone' in h && h.standalone,
 ).map(h => h.id);
 
 function asStringArray(value: unknown, field: string): string[] {
@@ -105,7 +107,7 @@ export function parseManifest(raw: string): AgentAssetsManifest {
 
   const harnesses = root.harnesses
     ? asStringArray(root.harnesses, 'harnesses')
-    : KNOWN_HARNESSES;
+    : STANDALONE_HARNESSES;
   const unknown = harnesses.filter(h => !KNOWN_HARNESSES.includes(h));
   if (unknown.length) {
     throw new ManifestError(
