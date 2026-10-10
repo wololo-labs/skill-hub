@@ -6,6 +6,7 @@ import {
 } from '@backstage/plugin-catalog-node';
 import { GithubAssetReader, RepoRef } from '../github/GithubAssetReader';
 import { SkillHubStatus, SkillHubStatusService, RepositoryStatus } from '../status';
+import { applyDependencyGate } from './dependencies';
 import { buildEntities, publishedPaths } from './entities';
 import { ManifestError, parseManifest } from './manifest';
 
@@ -258,9 +259,11 @@ export class AgentAssetEntityProvider implements EntityProvider {
       return;
     }
 
+    // A package's dependencies live in other repositories, so what blocks an
+    // install can only be worked out over the whole estate, never per scan.
     await this.#connection.applyMutation({
       type: 'full',
-      entities: entities.map(entity => ({
+      entities: applyDependencyGate(entities).map(entity => ({
         entity,
         locationKey: this.getProviderName(),
       })),

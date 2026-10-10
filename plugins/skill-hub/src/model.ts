@@ -5,9 +5,11 @@ import {
   ANNOTATION_EVAL_SCORE_REF,
   ANNOTATION_REPO,
   EvalScore,
+  InstallBlocker,
   InstallCommands,
   readEvalScore,
   readHarnesses,
+  readInstallBlockers,
   readInstallCommands,
 } from '@internal/plugin-skill-hub-common';
 
@@ -28,6 +30,8 @@ export interface Asset {
   score?: EvalScore;
   scoreRef?: string;
   install: InstallCommands;
+  /** Dependencies that hold a passing package back from being installed. */
+  blockedBy: InstallBlocker[];
   tags: string[];
 }
 
@@ -56,6 +60,7 @@ export function toAsset(entity: Entity): Asset {
     score: readEvalScore(entity),
     scoreRef: annotations[ANNOTATION_EVAL_SCORE_REF],
     install: readInstallCommands(entity),
+    blockedBy: readInstallBlockers(entity),
     tags: entity.metadata.tags ?? [],
   };
 }

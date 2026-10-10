@@ -2,7 +2,11 @@ import { useRef, useState } from 'react';
 import { Box, Typography, makeStyles } from '@material-ui/core';
 import { InfoCard, Link } from '@backstage/core-components';
 import { useApi } from '@backstage/core-plugin-api';
-import { HARNESSES, passedGate } from '@internal/plugin-skill-hub-common';
+import {
+  HARNESSES,
+  InstallBlocker,
+  passedGate,
+} from '@internal/plugin-skill-hub-common';
 import { Asset } from '../model';
 import { skillHubApiRef } from '../api';
 import { CopyCommand } from './CopyCommand';
@@ -164,7 +168,17 @@ export interface InstallPanelProps {
  * difference matters to whoever is reading: nobody measured this, somebody
  * measured it and it failed, or it passed against a different tree.
  */
-function blocked(failed: boolean, passed: boolean): { title: string; body: string } {
+function blocked(
+  failed: boolean,
+  passed: boolean,
+  held: boolean,
+): { title: string; body: string } {
+  if (held) {
+    return {
+      title: 'Install is blocked: a dependency has no passing gate',
+      body: 'This asset passed its own gate, but installing it also installs the packages below, and nobody has vouched for them. Score them, or drop them from the pack, and it becomes installable on the next sync.',
+    };
+  }
   if (failed) {
     return {
       title: 'Install is blocked: the eval gate failed',
@@ -182,6 +196,23 @@ function blocked(failed: boolean, passed: boolean): { title: string; body: strin
     body: 'Nobody has run an eval gate against this asset, so there is nothing to say whether it works. Publish a gate report and it becomes installable on the next sync.',
   };
 }
+
+const REASONS: Record<InstallBlocker['reason'], string> = {
+  unresolved: 'not a package in this catalogue',
+  unscored: 'no eval gate report',
+  failed: 'its eval gate did not pass',
+  blocked: 'held back by a dependency of its own',
+};
+
+const Blockers = ({ blockers }: { blockers: InstallBlocker[] }) => (
+  <ul aria-label="Dependencies holding this install back">
+    {blockers.map(b => (
+      <li key={`${b.ref}:${b.reason}`}>
+        <code>{b.ref}</code>: {REASONS[b.reason] ?? b.reason}
+      </li>
+    ))}
+  </ul>
+);
 
 export const InstallPanel = ({ asset, stale = false }: InstallPanelProps) => {
   const classes = useStyles();
@@ -214,7 +245,11 @@ export const InstallPanel = ({ asset, stale = false }: InstallPanelProps) => {
   // problem for whoever is reading.
   const passed = passedGate(asset.score);
   const failed = Boolean(asset.score) && !passed;
-  const installable = passed && (!stale || acknowledged);
+  // APM installs a package's own dependencies along with it, so a package
+  // that passed its gate is still held back while any of them is not vouched
+  // for. This only ever removes the command, never adds one.
+  const held = passed && asset.blockedBy.length > 0;
+  const installable = passed && !held && (!stale || acknowledged);
 
   // A radiogroup promises one tab stop and arrow keys. Without this it
   // delivers three tab stops and dead arrows, which is worse than no role.
@@ -273,7 +308,7 @@ export const InstallPanel = ({ asset, stale = false }: InstallPanelProps) => {
         ))}
       </div>
 
-      {passed && stale && (
+      {passed && !held && stale && (
         <div className={classes.stale}>
           <p className={classes.staleText}>
             This asset's score was measured against a different commit from the
@@ -317,11 +352,12 @@ export const InstallPanel = ({ asset, stale = false }: InstallPanelProps) => {
         ) : (
           <div className={classes.blocked}>
             <Typography className={classes.blockedTitle}>
-              {blocked(failed, passed).title}
+              {blocked(failed, passed, held).title}
             </Typography>
             <Typography className={classes.body}>
-              {blocked(failed, passed).body}
+              {blocked(failed, passed, held).body}
             </Typography>
+            {held && <Blockers blockers={asset.blockedBy} />}
             {!passed && (
               <Box mt={1.5}>
                 <Link

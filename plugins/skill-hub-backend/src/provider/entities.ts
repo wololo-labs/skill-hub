@@ -2,6 +2,7 @@ import { Entity } from '@backstage/catalog-model';
 import { minimatch } from 'minimatch';
 import { parse as parseYaml, parseAllDocuments } from 'yaml';
 import {
+  ANNOTATION_APM_DEPENDENCIES,
   ANNOTATION_APM_PACKAGE,
   ANNOTATION_ASSET_PATH,
   ANNOTATION_BODY_PATH,
@@ -332,7 +333,17 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
         ? await read(`${dir}/eval-score.json`)
         : undefined,
     );
-    const deps = apm.dependencies as { mcp?: unknown } | undefined;
+    const deps = apm.dependencies as
+      | { apm?: unknown; mcp?: unknown }
+      | undefined;
+    // What APM will install alongside this package. A list the hub cannot
+    // read is recorded as a dependency it cannot vouch for, never as none.
+    const apmDeps =
+      deps?.apm === undefined || deps.apm === null
+        ? []
+        : Array.isArray(deps.apm)
+          ? deps.apm
+          : ['(unreadable dependency list)'];
     const mcp = Array.isArray(deps?.mcp)
       ? (deps.mcp.filter(
           (m): m is Record<string, unknown> =>
@@ -370,6 +381,9 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
             ? { [ANNOTATION_APM_PACKAGE]: `${name}@${info.version}` }
             : {}),
           ...(score ? { [ANNOTATION_EVAL_SCORE]: JSON.stringify(score) } : {}),
+          ...(apmDeps.length
+            ? { [ANNOTATION_APM_DEPENDENCIES]: JSON.stringify(apmDeps) }
+            : {}),
           [ANNOTATION_INSTALL]: JSON.stringify(
             installCommands(repo, commitSha, manifest.harnesses, {
               kind: 'package',
