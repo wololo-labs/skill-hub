@@ -5,6 +5,7 @@ import { useApi } from '@backstage/core-plugin-api';
 import {
   HARNESSES,
   passedGate,
+  ScoreState,
   scoreState,
 } from '@internal/plugin-skill-hub-common';
 import { Asset } from '../model';
@@ -169,15 +170,15 @@ export interface InstallPanelProps {
  * measured it and it failed, or it passed against a different tree.
  */
 function blocked(
-  failed: boolean,
+  state: ScoreState,
   passed: boolean,
-  regressed: boolean,
 ): { title: string; body: string } {
-  if (failed) {
+  if (state === 'regressed' || state === 'failed') {
     return {
-      title: regressed
-        ? 'Install is blocked: the asset regressed'
-        : 'Install is blocked: the eval gate failed',
+      title:
+        state === 'regressed'
+          ? 'Install is blocked: the asset regressed'
+          : 'Install is blocked: the eval gate failed',
       body: 'The gate that ran against this asset did not pass, so the measurement above is a record of it not working. Fix the asset and publish a passing report, and it becomes installable on the next sync.',
     };
   }
@@ -223,11 +224,12 @@ export const InstallPanel = ({ asset, stale = false }: InstallPanelProps) => {
   // all, and says so in different words, because the two are not the same
   // problem for whoever is reading.
   const passed = passedGate(asset.score);
-  const failed = Boolean(asset.score) && !passed;
+  const state = scoreState(asset.score);
   const installable = passed && (!stale || acknowledged);
+  const message = blocked(state, passed);
   // Install stays open for a pass that shows no gain, because the asset is not
   // broken, but the reader is told in as many words what the score does not say.
-  const noGain = scoreState(asset.score) === 'no-gain';
+  const noGain = state === 'no-gain';
 
   // A radiogroup promises one tab stop and arrow keys. Without this it
   // delivers three tab stops and dead arrows, which is worse than no role.
@@ -342,17 +344,9 @@ export const InstallPanel = ({ asset, stale = false }: InstallPanelProps) => {
         ) : (
           <div className={classes.blocked}>
             <Typography className={classes.blockedTitle}>
-              {
-                blocked(failed, passed, scoreState(asset.score) === 'regressed')
-                  .title
-              }
+              {message.title}
             </Typography>
-            <Typography className={classes.body}>
-              {
-                blocked(failed, passed, scoreState(asset.score) === 'regressed')
-                  .body
-              }
-            </Typography>
+            <Typography className={classes.body}>{message.body}</Typography>
             {!passed && (
               <Box mt={1.5}>
                 <Link
