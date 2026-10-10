@@ -14,6 +14,7 @@ import {
   ANNOTATION_SOURCE_LOCATION,
   EvalScore,
   InstallCommands,
+  passedGate,
 } from '@internal/plugin-skill-hub-common';
 import { RepoRef, TreeEntry } from '../github/GithubAssetReader';
 import {
@@ -103,7 +104,12 @@ function installCommands(
   commitSha: string,
   harnesses: string[],
   target: { kind: 'package'; dir: string } | { kind: 'unit'; path: string },
+  score: EvalScore | undefined,
 ): InstallCommands {
+  // The install gate is enforced here as well as in the UI: an asset with no
+  // passing score has no command to copy, so the block is not only a button
+  // that was left off a page.
+  if (!passedGate(score)) return {};
   const subject = target.kind === 'package' ? target.dir : target.path;
   if (!shellSafe(repo.owner, repo.repo, subject) || !/^[0-9a-f]{40}$/.test(commitSha)) {
     return {};
@@ -142,6 +148,8 @@ function readGateReport(reportJson: string): EvalScore | undefined {
     sourceVisibility?: unknown;
     subject?: { commit?: unknown } | null;
     signals?: unknown;
+    stats?: Record<string, unknown> | null;
+    baseline_kind?: unknown;
   };
   try {
     report = JSON.parse(reportJson);
@@ -176,20 +184,47 @@ function readGateReport(reportJson: string): EvalScore | undefined {
 
   const text = (value: unknown) =>
     typeof value === 'string' && value ? value : undefined;
-  const commit = text(report.subject?.commit);
+  // A sha is lower cased, and anything else (a tag, a branch) is kept as it was
+  // written: dropping it would make a score taken at v1.2.0 read as current.
+  const written = text(report.subject?.commit)?.trim();
+  const commit =
+    written && /^[0-9a-f]{7,40}$/i.test(written)
+      ? written.toLowerCase()
+      : written;
+  const num = (value: unknown) =>
+    typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+  const flag = (value: unknown) =>
+    typeof value === 'boolean' ? value : undefined;
+  const raw = typeof report.stats === 'object' ? report.stats : null;
+  // Only what the report states is carried. A flag the report does not set
+  // stays unset, so a missing `significant_improvement` can never read as one.
+  const stats = raw
+    ? Object.fromEntries(
+        Object.entries({
+          meanDelta: num(raw.mean_delta),
+          ciLow: num(raw.ci_low),
+          ciHigh: num(raw.ci_high),
+          confidence: num(raw.confidence),
+          significantImprovement: flag(raw.significant_improvement),
+          significantRegression: flag(raw.significant_regression),
+        }).filter(([, v]) => v !== undefined),
+      )
+    : {};
 
   return {
     // `pass` is the only verdict that opens the install gate, and every other
     // one the gate can return (`regression`, `refused`) is carried through as
     // itself rather than flattened to a failure it might not be.
+    origin: 'gate-report' as const,
+    // Only when the report says the baseline was no skill at all.
+    ...(report.baseline_kind === 'no-skill' ? { baselineKind: 'no-skill' as const } : {}),
     verdict: report.verdict.toUpperCase(),
     recorded: text(report.recorded),
     source: text(report.source),
     sourceVisibility: text(report.sourceVisibility),
     ...(Object.keys(metrics).length ? { metrics } : {}),
-    ...(commit && /^[0-9a-f]{7,40}$/.test(commit)
-      ? { measuredCommit: commit }
-      : {}),
+    ...(Object.keys(stats).length ? { stats } : {}),
+    ...(commit ? { measuredCommit: commit } : {}),
   };
 }
 
@@ -215,10 +250,11 @@ function readPackageScore(
         const entity = doc.toJS() as Entity | null;
         const raw = entity?.metadata?.annotations?.[ANNOTATION_EVAL_SCORE];
         if (!raw) continue;
-        const score = JSON.parse(raw) as EvalScore;
+        // Stamped here, whatever the file says about itself.
+        const score = { ...(JSON.parse(raw) as EvalScore), origin: 'catalogue' as const };
         const location =
           entity?.metadata?.annotations?.[ANNOTATION_SOURCE_LOCATION];
-        const measured = /\/(?:tree|blob)\/([0-9a-f]{7,40})\//.exec(
+        const measured = /\/(?:tree|blob)\/([^/]+)\//.exec(
           location ?? '',
         )?.[1];
         return measured ? { ...score, measuredCommit: measured } : score;
@@ -232,9 +268,10 @@ function readPackageScore(
       const parsed = JSON.parse(evalScoreJson) as EvalScore & {
         commit?: string;
       };
+      const stamped = { ...parsed, origin: 'eval-score' as const };
       return parsed.commit
-        ? { ...parsed, measuredCommit: parsed.commit }
-        : parsed;
+        ? { ...stamped, measuredCommit: parsed.commit }
+        : stamped;
     } catch {
       return undefined;
     }
@@ -371,10 +408,13 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
             : {}),
           ...(score ? { [ANNOTATION_EVAL_SCORE]: JSON.stringify(score) } : {}),
           [ANNOTATION_INSTALL]: JSON.stringify(
-            installCommands(repo, commitSha, manifest.harnesses, {
-              kind: 'package',
-              dir,
-            }),
+            installCommands(
+              repo,
+              commitSha,
+              manifest.harnesses,
+              { kind: 'package', dir },
+              score,
+            ),
           ),
         },
         links: sourceLink(dir, 'tree'),
@@ -406,10 +446,13 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
               : {}),
             [ANNOTATION_EVAL_SCORE_REF]: `system:${namespace}/${info.name}`,
             [ANNOTATION_INSTALL]: JSON.stringify(
-              installCommands(repo, commitSha, manifest.harnesses, {
-                kind: 'package',
-                dir,
-              }),
+              installCommands(
+                repo,
+                commitSha,
+                manifest.harnesses,
+                { kind: 'package', dir },
+                score,
+              ),
             ),
           },
           links: sourceLink(path, 'blob'),
@@ -489,6 +532,7 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
               pkg
                 ? { kind: 'package', dir: pkg.dir }
                 : { kind: 'unit', path },
+              pkg?.score,
             ),
           ),
         },
@@ -550,6 +594,7 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
                 pkg
                   ? { kind: 'package', dir: pkg.dir }
                   : { kind: 'unit', path: assetPath },
+                pkg?.score,
               ),
             ),
           },
