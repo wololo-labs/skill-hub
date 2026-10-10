@@ -326,7 +326,7 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
   const base = (
     path: string,
     kind: 'blob' | 'tree',
-    bodyPath?: string,
+    bodyPath: string | undefined,
     harnesses: string[],
   ) => ({
     [ANNOTATION_SOURCE_LOCATION]: `url:${sourceUrl(repo, commitSha, path, kind)}`,
