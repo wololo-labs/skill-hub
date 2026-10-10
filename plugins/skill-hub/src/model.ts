@@ -76,6 +76,19 @@ export function scoreStateOf(asset: Asset): ScoreState {
   return scoreState(asset.score);
 }
 
+/** How many assets are in each state, every state present even when zero. */
+export function countByState(assets: Asset[]): Record<ScoreState, number> {
+  const counts: Record<ScoreState, number> = {
+    gain: 0,
+    'no-gain': 0,
+    regressed: 0,
+    failed: 0,
+    unscored: 0,
+  };
+  for (const asset of assets) counts[scoreStateOf(asset)] += 1;
+  return counts;
+}
+
 /** The words a state goes by in facets and counts. */
 export const SCORE_STATE_LABEL: Record<ScoreState, string> = {
   gain: 'measured gain',

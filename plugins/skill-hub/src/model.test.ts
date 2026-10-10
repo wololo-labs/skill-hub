@@ -9,6 +9,7 @@ import {
   applyFacets,
   facetCounts,
   scoreStateOf,
+  countByState,
   toAsset,
   visibleAssets,
 } from './model';
@@ -194,5 +195,31 @@ describe('the four score states in the browse model', () => {
       'b-regressed',
       'a-unscored',
     ]);
+  });
+});
+
+describe('countByState', () => {
+  it('counts all five states, so the header never hides one', () => {
+    const everything = [
+      entity({ name: 'a' }),
+      entity({ name: 'b', score: { verdict: 'REGRESSION' } }),
+      entity({ name: 'c', score: { verdict: 'REFUSED' } }),
+      entity({ name: 'd', score: { verdict: 'PASS' } }),
+      entity({
+        name: 'e',
+        score: { verdict: 'PASS', stats: { significantImprovement: true } },
+      }),
+    ].map(toAsset);
+    const counts = countByState(everything);
+    expect(counts).toEqual({
+      unscored: 1,
+      regressed: 1,
+      failed: 1,
+      'no-gain': 1,
+      gain: 1,
+    });
+    expect(Object.values(counts).reduce((a, b) => a + b, 0)).toBe(
+      everything.length,
+    );
   });
 });
