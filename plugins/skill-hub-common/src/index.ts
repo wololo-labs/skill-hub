@@ -119,11 +119,7 @@ const text = (value: unknown) =>
 const finite = (value: unknown) =>
   typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 const shown = (value: unknown) =>
-  typeof value === 'number' && Number.isFinite(value)
-    ? value
-    : typeof value === 'string'
-      ? value
-      : undefined;
+  finite(value) ?? (typeof value === 'string' ? value : undefined);
 
 /**
  * A score is read from an annotation that a publisher, a legacy
