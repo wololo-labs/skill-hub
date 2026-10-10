@@ -78,12 +78,12 @@ const useStyles = makeStyles(theme => ({
     alignItems: 'center',
     flexWrap: 'wrap',
     gap: 8,
+    maxWidth: 360,
   },
   commits: {
     fontFamily: 'monospace',
     fontSize: 11,
     color: theme.palette.status.warning,
-    whiteSpace: 'nowrap',
   },
   metric: {
     fontVariantNumeric: 'tabular-nums',
@@ -177,7 +177,9 @@ export const ScoreBadge = ({
         <span className={classes.visible} aria-hidden="true">
           {label}
           {state === 'gain' && headline && (
-            <span className={classes.metric}>{headline.candidate}</span>
+            <span className={classes.metric}>
+              {headline.candidate.toFixed(3)}
+            </span>
           )}
         </span>
         {/*
