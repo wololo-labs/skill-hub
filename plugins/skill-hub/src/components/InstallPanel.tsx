@@ -2,7 +2,11 @@ import { useRef, useState } from 'react';
 import { Box, Typography, makeStyles } from '@material-ui/core';
 import { InfoCard, Link } from '@backstage/core-components';
 import { useApi } from '@backstage/core-plugin-api';
-import { HARNESSES, passedGate } from '@internal/plugin-skill-hub-common';
+import {
+  HARNESSES,
+  passedGate,
+  scoreState,
+} from '@internal/plugin-skill-hub-common';
 import { Asset } from '../model';
 import { skillHubApiRef } from '../api';
 import { CopyCommand } from './CopyCommand';
@@ -164,10 +168,16 @@ export interface InstallPanelProps {
  * difference matters to whoever is reading: nobody measured this, somebody
  * measured it and it failed, or it passed against a different tree.
  */
-function blocked(failed: boolean, passed: boolean): { title: string; body: string } {
+function blocked(
+  failed: boolean,
+  passed: boolean,
+  regressed: boolean,
+): { title: string; body: string } {
   if (failed) {
     return {
-      title: 'Install is blocked: the eval gate failed',
+      title: regressed
+        ? 'Install is blocked: the asset regressed'
+        : 'Install is blocked: the eval gate failed',
       body: 'The gate that ran against this asset did not pass, so the measurement above is a record of it not working. Fix the asset and publish a passing report, and it becomes installable on the next sync.',
     };
   }
@@ -215,6 +225,9 @@ export const InstallPanel = ({ asset, stale = false }: InstallPanelProps) => {
   const passed = passedGate(asset.score);
   const failed = Boolean(asset.score) && !passed;
   const installable = passed && (!stale || acknowledged);
+  // Install stays open for a pass that shows no gain, because the asset is not
+  // broken, but the reader is told in as many words what the score does not say.
+  const noGain = scoreState(asset.score) === 'no-gain';
 
   // A radiogroup promises one tab stop and arrow keys. Without this it
   // delivers three tab stops and dead arrows, which is worse than no role.
@@ -293,6 +306,15 @@ export const InstallPanel = ({ asset, stale = false }: InstallPanelProps) => {
       )}
 
       <Box>
+        {installable && noGain && (
+          <div className={classes.stale} role="note">
+            <p className={classes.staleText}>
+              No measured gain over the model alone. This asset passed its gate,
+              but the gate could not show it does better than the model without
+              it.
+            </p>
+          </div>
+        )}
         {installable ? (
           <>
             <div className={classes.commandRow}>
@@ -317,10 +339,16 @@ export const InstallPanel = ({ asset, stale = false }: InstallPanelProps) => {
         ) : (
           <div className={classes.blocked}>
             <Typography className={classes.blockedTitle}>
-              {blocked(failed, passed).title}
+              {
+                blocked(failed, passed, scoreState(asset.score) === 'regressed')
+                  .title
+              }
             </Typography>
             <Typography className={classes.body}>
-              {blocked(failed, passed).body}
+              {
+                blocked(failed, passed, scoreState(asset.score) === 'regressed')
+                  .body
+              }
             </Typography>
             {!passed && (
               <Box mt={1.5}>

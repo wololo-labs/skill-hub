@@ -1,5 +1,9 @@
 import { Tooltip, makeStyles } from '@material-ui/core';
-import { EvalScore, passedGate } from '@internal/plugin-skill-hub-common';
+import {
+  EvalScore,
+  isScoreStale,
+  scoreState,
+} from '@internal/plugin-skill-hub-common';
 
 const useStyles = makeStyles(theme => ({
   badge: {
@@ -60,6 +64,27 @@ const useStyles = makeStyles(theme => ({
     borderStyle: 'dashed',
     fontWeight: 600,
   },
+  // Passed, but nothing shows it beats the model alone. Filled like a pass
+  // would be, so it cannot be mistaken for a failure, but dashed like
+  // unscored, so it cannot be mistaken for a demonstrated gain.
+  nogain: {
+    backgroundColor: 'transparent',
+    color: theme.palette.infoText,
+    borderColor: theme.palette.status.ok,
+    borderStyle: 'dashed',
+  },
+  pair: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  commits: {
+    fontFamily: 'monospace',
+    fontSize: 11,
+    color: theme.palette.status.warning,
+    whiteSpace: 'nowrap',
+  },
   metric: {
     fontVariantNumeric: 'tabular-nums',
     letterSpacing: 0,
@@ -71,6 +96,8 @@ const useStyles = makeStyles(theme => ({
 export interface ScoreBadgeProps {
   score?: EvalScore;
   size?: 'small' | 'medium';
+  /** The commit the asset is pinned to, so a stale score can be shown as one. */
+  pinnedCommit?: string;
 }
 
 /**
@@ -80,7 +107,11 @@ export interface ScoreBadgeProps {
  * be unmistakably different from a gate that passed, because that difference
  * is what decides whether the install button works.
  */
-export const ScoreBadge = ({ score, size = 'small' }: ScoreBadgeProps) => {
+export const ScoreBadge = ({
+  score,
+  size = 'small',
+  pinnedCommit,
+}: ScoreBadgeProps) => {
   const classes = useStyles();
   const sized = `${classes.badge} ${size === 'medium' ? classes.medium : ''}`;
 
@@ -97,25 +128,55 @@ export const ScoreBadge = ({ score, size = 'small' }: ScoreBadgeProps) => {
     );
   }
 
+  const state = scoreState(score);
   const verdict = (score.verdict ?? 'scored').toUpperCase();
-  // One definition of a passed gate, shared with the install gate, so the
-  // badge and the button can never disagree about what the score says.
-  const passed = passedGate(score);
+  const label = {
+    gain: 'measured gain',
+    'no-gain': 'no measured gain over the model alone',
+    regressed: 'regressed',
+    failed: verdict,
+    unscored: 'unscored',
+  }[state];
+  const style = {
+    gain: classes.pass,
+    'no-gain': classes.nogain,
+    regressed: classes.fail,
+    failed: classes.fail,
+    unscored: classes.unscored,
+  }[state];
   const headline = topMetric(score);
+  const ci = score.stats;
+  const interval =
+    ci?.ciLow !== undefined && ci.ciHigh !== undefined
+      ? ` Mean change ${ci.meanDelta?.toFixed(4) ?? 'unrecorded'}, ${Math.round(
+          (ci.confidence ?? 0.95) * 100,
+        )}% interval ${ci.ciLow.toFixed(4)} to ${ci.ciHigh.toFixed(4)}.`
+      : '';
 
   // The number on the badge means nothing on its own, so what it measures
   // travels with it: in the tooltip for a pointer, and in the accessible name
   // for everyone a tooltip never reaches.
-  const explanation = headline
-    ? `Eval gate ${verdict}: ${headline.name} ${headline.candidate} against a ${headline.baseline} baseline, recorded ${score.recorded ?? 'on an unknown date'}`
-    : `Eval gate ${verdict}`;
+  const measured = headline
+    ? ` ${headline.name} ${headline.candidate} against a ${headline.baseline} baseline, recorded ${score.recorded ?? 'on an unknown date'}.`
+    : '';
+  const explanation = `Eval gate ${verdict}: ${label}.${interval}${measured}`;
 
-  return (
+  // The score is never hidden for being old, only dated: both commits sit
+  // beside the badge so the reader can see exactly how far apart they are.
+  const stale = isScoreStale(score, pinnedCommit);
+  const staleNote = stale
+    ? `scored at ${score.measuredCommit!.slice(
+        0,
+        7,
+      )}, pinned ${pinnedCommit!.slice(0, 7)}`
+    : undefined;
+
+  const badge = (
     <Tooltip title={explanation}>
-      <span className={`${sized} ${passed ? classes.pass : classes.fail}`}>
+      <span className={`${sized} ${style}`}>
         <span className={classes.visible} aria-hidden="true">
-          {verdict}
-          {headline && (
+          {label}
+          {state === 'gain' && headline && (
             <span className={classes.metric}>{headline.candidate}</span>
           )}
         </span>
@@ -127,6 +188,13 @@ export const ScoreBadge = ({ score, size = 'small' }: ScoreBadgeProps) => {
         <span className={classes.srOnly}>{explanation}</span>
       </span>
     </Tooltip>
+  );
+  if (!staleNote) return badge;
+  return (
+    <span className={classes.pair}>
+      {badge}
+      <span className={classes.commits}>stale: {staleNote}</span>
+    </span>
   );
 };
 

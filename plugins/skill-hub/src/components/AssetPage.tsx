@@ -24,6 +24,7 @@ import { useRouteRef } from '@backstage/frontend-plugin-api';
 import { catalogApiRef } from '@backstage/plugin-catalog-react';
 import useAsyncRetry from 'react-use/esm/useAsyncRetry';
 import useAsync from 'react-use/esm/useAsync';
+import { isScoreStale } from '@internal/plugin-skill-hub-common';
 import { toAsset } from '../model';
 import { skillHubApiRef } from '../api';
 import { rootRouteRef } from '../plugin';
@@ -238,11 +239,7 @@ export const AssetPage = () => {
     asset.repo && asset.commit && asset.path
       ? `https://github.com/${asset.repo}/tree/${asset.commit}/${asset.path}`
       : undefined;
-  const stale =
-    score?.measuredCommit &&
-    asset.commit &&
-    !asset.commit.startsWith(score.measuredCommit) &&
-    !score.measuredCommit.startsWith(asset.commit);
+  const stale = isScoreStale(score, asset.commit);
 
   return (
     <Page themeId="home">
@@ -252,7 +249,7 @@ export const AssetPage = () => {
       >
         <div className={classes.badges}>
           <span className={classes.type}>{asset.type}</span>
-          <ScoreBadge score={score} size="medium" />
+          <ScoreBadge score={score} size="medium" pinnedCommit={asset.commit} />
         </div>
       </Header>
 
@@ -330,7 +327,7 @@ export const AssetPage = () => {
               // chosen harness and the copy receipt all travel to the next one.
               key={asset.entityRef}
               asset={asset}
-              stale={Boolean(stale)}
+              stale={stale}
             />
 
             <InfoCard title="Provenance">
@@ -382,6 +379,21 @@ export const AssetPage = () => {
                       {score.recorded && (
                         <Row label="Recorded" value={score.recorded} />
                       )}
+                      {score.stats?.ciLow !== undefined &&
+                        score.stats.ciHigh !== undefined && (
+                          <Row
+                            label={`Change vs model alone (${Math.round(
+                              (score.stats.confidence ?? 0.95) * 100,
+                            )}% interval)`}
+                            value={
+                              <span className={classes.mono}>
+                                {score.stats.meanDelta?.toFixed(4)} (
+                                {score.stats.ciLow.toFixed(4)} to{' '}
+                                {score.stats.ciHigh.toFixed(4)})
+                              </span>
+                            }
+                          />
+                        )}
                       {score.measuredCommit && (
                         <Row
                           label="Measured at"
