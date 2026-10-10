@@ -67,6 +67,8 @@ interface PackageInfo {
 }
 
 const dirname = (path: string) => path.split('/').slice(0, -1).join('/');
+/** A file beside something in `dir`, where the repository root is the empty dir. */
+const inDir = (dir: string, file: string) => (dir ? `${dir}/${file}` : file);
 const basename = (path: string) => path.split('/').pop() ?? path;
 const stem = (path: string) => basename(path).replace(/\.[^.]+$/, '');
 
@@ -121,7 +123,13 @@ function installCommands(
   target: { kind: 'package'; dir: string } | { kind: 'unit'; path: string },
 ): InstallCommands {
   const subject = target.kind === 'package' ? target.dir : target.path;
-  if (!shellSafe(repo.owner, repo.repo, subject) || !/^[0-9a-f]{40}$/.test(commitSha)) {
+  // A pack at the repository root has no path to check or to put in the
+  // command, and an empty path is not an unsafe one.
+  const checked = subject === '' && target.kind === 'package' ? [] : [subject];
+  if (
+    !shellSafe(repo.owner, repo.repo, ...checked) ||
+    !/^[0-9a-f]{40}$/.test(commitSha)
+  ) {
     return {};
   }
 
@@ -129,7 +137,9 @@ function installCommands(
   for (const harness of harnesses) {
     commands[harness] =
       target.kind === 'package'
-        ? `apm install '${repo.owner}/${repo.repo}/${target.dir}#${commitSha}' --target ${harness}`
+        ? `apm install '${repo.owner}/${repo.repo}${
+            target.dir ? `/${target.dir}` : ''
+          }#${commitSha}' --target ${harness}`
         : [
             `ainb source add gh:${repo.owner}/${repo.repo}`,
             `ainb skill install 'gh:${repo.owner}/${repo.repo}@${commitSha}/${target.path}' --targets ${harness} --yes`,
@@ -465,10 +475,10 @@ export function publishedPaths(
   const sidecars = matched
     .filter(path => matches(path, manifest.publish.packages ?? []))
     .flatMap(path => [
-      `${dirname(path)}/eval-gate-report.json`,
-      `${dirname(path)}/catalog-info.yaml`,
-      `${dirname(path)}/eval-score.json`,
-      `${dirname(path)}/README.md`,
+      inDir(dirname(path), 'eval-gate-report.json'),
+      inDir(dirname(path), 'catalog-info.yaml'),
+      inDir(dirname(path), 'eval-score.json'),
+      inDir(dirname(path), 'README.md'),
     ])
     .filter(path => files.includes(path));
   return [...new Set([...matched, ...sidecars])];
@@ -602,14 +612,14 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
         ? apm.name
         : stem(dir || path);
     const score = readPackageScore(
-      paths.has(`${dir}/eval-gate-report.json`)
-        ? await read(`${dir}/eval-gate-report.json`)
+      paths.has(inDir(dir, 'eval-gate-report.json'))
+        ? await read(inDir(dir, 'eval-gate-report.json'))
         : undefined,
-      paths.has(`${dir}/catalog-info.yaml`)
-        ? await read(`${dir}/catalog-info.yaml`)
+      paths.has(inDir(dir, 'catalog-info.yaml'))
+        ? await read(inDir(dir, 'catalog-info.yaml'))
         : undefined,
-      paths.has(`${dir}/eval-score.json`)
-        ? await read(`${dir}/eval-score.json`)
+      paths.has(inDir(dir, 'eval-score.json'))
+        ? await read(inDir(dir, 'eval-score.json'))
         : undefined,
     );
     const deps = apm.dependencies as { mcp?: unknown } | undefined;
@@ -653,7 +663,7 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
           ...base(
             dir,
             'tree',
-            paths.has(`${dir}/README.md`) ? `${dir}/README.md` : path,
+            paths.has(inDir(dir, 'README.md')) ? inDir(dir, 'README.md') : path,
             info.harnesses,
           ),
           ...(info.version

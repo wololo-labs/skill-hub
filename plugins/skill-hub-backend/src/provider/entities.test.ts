@@ -754,6 +754,25 @@ publish:
     expect(collisions).toEqual(['AiResource:wololo-labs-estate/tdd']);
   });
 
+  it('installs a pack at the repository root, and reads its sidecars, without blaming its path', async () => {
+    const { entities } = await buildEntities({
+      repo: REPO,
+      commitSha: SHA,
+      manifest: parseManifest('owner: team\npublish:\n  packages: apm.yml\n'),
+      ...repository({
+        'apm.yml': 'name: root-pack\nversion: 0.1.0\ntargets: [claude]\n',
+        'eval-gate-report.json': JSON.stringify({ verdict: 'pass', signals: [] }),
+      }),
+    });
+    const system = find(entities, 'System', 'root-pack')!;
+    expect(readInstallCommands(system).claude).toBe(
+      `apm install 'wololo-labs/estate#${SHA}' --target claude`,
+    );
+    expect(readInstallUnavailable(system)).toBeUndefined();
+    // The sidecar at the root is found, not looked for at /eval-gate-report.json.
+    expect(readEvalScore(system)?.verdict).toBe('PASS');
+  });
+
   it('lets a failed read of apm.yml propagate, so the provider can carry the repository forward', async () => {
     // A fetch error is not a parse error: refusing the pack for it would
     // publish a refused pack in place of a good one on a transient failure.
