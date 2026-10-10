@@ -305,11 +305,11 @@ function packageHarnesses(
     : [];
   // A pack nobody can install is a problem with the pack or the repository's
   // harnesses, and it should be reported rather than shown as an empty list.
-  if (!harnesses.length && !warnings.length) {
+  if (!harnesses.length) {
     warnings.push(
       `${where}: apm.yml declares ${tokens.join(
         ', ',
-      )}, none of which this repository's harnesses allow, so no install command is offered`,
+      )}, none of which can be offered here, so no install command is offered`,
     );
   }
   return { harnesses, warnings, refused: false };

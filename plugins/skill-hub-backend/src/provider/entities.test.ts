@@ -506,6 +506,14 @@ publish:
       expect(warnings).toEqual([expect.stringContaining('brand-new')]);
     });
 
+    it('reports both the unknown target and the pack left with no command', async () => {
+      const { warnings } = await pack('name: p\ntargets: [not-a-harness]\n');
+      expect(warnings).toEqual([
+        expect.stringContaining('not-a-harness'),
+        expect.stringContaining('no install command'),
+      ]);
+    });
+
     it('offers nothing for a declaration naming only unknown targets', async () => {
       const { system } = await pack('name: p\ntargets: [not-a-harness]\n');
       expect(readHarnesses(system)).toEqual([]);
