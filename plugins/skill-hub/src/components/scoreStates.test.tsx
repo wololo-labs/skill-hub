@@ -111,6 +111,7 @@ describe('the four score states', () => {
     expect(await screen.findAllByText('regressed')).not.toHaveLength(0);
     expect(command()).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /copy/i })).toBeNull();
+    expect(screen.queryByRole('radiogroup')).toBeNull();
     expect(screen.getByText(/the asset regressed/)).toBeInTheDocument();
   });
 

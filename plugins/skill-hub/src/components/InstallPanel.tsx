@@ -256,42 +256,45 @@ export const InstallPanel = ({ asset, stale = false }: InstallPanelProps) => {
           : undefined
       }
     >
-      <div
-        className={classes.harnesses}
-        role="radiogroup"
-        aria-label="Target harness"
-      >
-        {offered.map((h, i) => (
-          <button
-            key={h.id}
-            ref={el => {
-              radios.current[i] = el;
-            }}
-            type="button"
-            role="radio"
-            aria-checked={i === index}
-            // Roving tabindex: the group is one stop, arrows move within it.
-            tabIndex={i === index ? 0 : -1}
-            onKeyDown={onKeyDown}
-            onClick={() => {
-              setSelected(i);
-              setCopied(false);
-            }}
-            className={`${classes.harness} ${
-              i === index ? classes.harnessOn : ''
-            }`}
-          >
-            {h.label}
-          </button>
-        ))}
-      </div>
+      {/* No passing gate means no command, so no harness to pick either. */}
+      {passed && (
+        <div
+          className={classes.harnesses}
+          role="radiogroup"
+          aria-label="Target harness"
+        >
+          {offered.map((h, i) => (
+            <button
+              key={h.id}
+              ref={el => {
+                radios.current[i] = el;
+              }}
+              type="button"
+              role="radio"
+              aria-checked={i === index}
+              // Roving tabindex: the group is one stop, arrows move within it.
+              tabIndex={i === index ? 0 : -1}
+              onKeyDown={onKeyDown}
+              onClick={() => {
+                setSelected(i);
+                setCopied(false);
+              }}
+              className={`${classes.harness} ${
+                i === index ? classes.harnessOn : ''
+              }`}
+            >
+              {h.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {passed && stale && (
         <div className={classes.stale}>
           <p className={classes.staleText}>
             This asset's score was measured against a different commit from the
-            one this command installs, so it does not describe what you would
-            be running.
+            one this command installs, so it does not describe what you would be
+            running.
           </p>
           <label className={classes.acknowledge}>
             <input
@@ -306,7 +309,7 @@ export const InstallPanel = ({ asset, stale = false }: InstallPanelProps) => {
       )}
 
       <Box>
-        {installable && noGain && (
+        {passed && noGain && (
           <div className={classes.stale} role="note">
             <p className={classes.staleText}>
               No measured gain over the model alone. This asset passed its gate,
