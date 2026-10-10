@@ -129,12 +129,12 @@ export const ScoreBadge = ({
   }
 
   const state = scoreState(score);
-  const verdict = (score.verdict ?? 'scored').toUpperCase();
+  const verdict = score.verdict?.toUpperCase();
   const label = {
     gain: 'measured gain',
     'no-gain': 'no measured gain over the model alone',
     regressed: 'regressed',
-    failed: verdict,
+    failed: verdict ?? 'verdict missing',
     unscored: 'unscored',
   }[state];
   const style = {
@@ -175,7 +175,9 @@ export const ScoreBadge = ({
         headline.baseline
       } baseline, recorded ${score.recorded ?? 'on an unknown date'}.`
     : '';
-  const explanation = `Eval gate ${verdict}: ${label}.${interval}${measured}`;
+  const explanation = verdict
+    ? `Eval gate ${verdict}: ${label}.${interval}${measured}`
+    : `Eval gate report has no verdict, so it counts as a failed gate.${measured}`;
 
   // The score is never hidden for being old, only dated: both commits sit
   // beside the badge so the reader can see exactly how far apart they are.

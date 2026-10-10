@@ -208,3 +208,11 @@ describe('a legacy score with values of the wrong type', () => {
     ).not.toHaveLength(0);
   });
 });
+
+describe('a score with no verdict', () => {
+  it('says the verdict is missing rather than showing a red SCORED', async () => {
+    wrap(<ScoreBadge score={{}} pinnedCommit={PINNED} />);
+    expect(await screen.findByText('verdict missing')).toBeInTheDocument();
+    expect(screen.queryByText(/^scored$/i)).not.toBeInTheDocument();
+  });
+});
