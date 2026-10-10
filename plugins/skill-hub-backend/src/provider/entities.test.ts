@@ -350,6 +350,21 @@ publish:
         expect(readHarnesses(skill)).toEqual(['claude', 'copilot']);
       });
 
+      it('keeps codex when the pack was narrowed to nothing but APM still reads it', async () => {
+        const { entities } = await pack(
+          'name: p\ntargets: [cursor]\ndependencies:\n  mcp:\n    - name: runner\n',
+          'harnesses: [claude, codex]\n',
+        );
+        expect(readHarnesses(server(entities))).toEqual(['codex']);
+      });
+
+      it('offers nothing for a pack APM refuses to read', async () => {
+        const { entities } = await pack(
+          'name: p\ntargets: []\ndependencies:\n  mcp:\n    - name: runner\n',
+        );
+        expect(readHarnesses(server(entities))).toEqual([]);
+      });
+
       it('does not add codex when the repository has narrowed it away', async () => {
         const { entities } = await withMcp('harnesses: [claude, copilot]\n');
         expect(readHarnesses(server(entities))).toEqual(['claude', 'copilot']);

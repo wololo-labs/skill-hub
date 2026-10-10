@@ -53,6 +53,8 @@ interface PackageInfo {
   score?: EvalScore;
   /** The harnesses APM will actually deploy this package to. */
   harnesses: string[];
+  /** APM would refuse to read this pack at all, so nothing in it installs. */
+  refused: boolean;
   mcp: Array<Record<string, unknown>>;
 }
 
@@ -265,7 +267,7 @@ function packageHarnesses(
   manifest: AgentAssetsManifest,
   dir: string,
   refusal?: string,
-): { harnesses: string[]; warnings: string[] } {
+): { harnesses: string[]; warnings: string[]; refused: boolean } {
   const { tokens, error: declarationError } = declaredTargets(apm);
   const error = refusal ?? declarationError;
   const where = dir || '(repository root)';
@@ -275,12 +277,15 @@ function packageHarnesses(
     // harnesses would hand over a command that fails.
     return {
       harnesses: [],
+      refused: true,
       warnings: [
         `${where}: apm.yml ${error}, so no install command is offered`,
       ],
     };
   }
-  if (!tokens) return { harnesses: manifest.harnesses, warnings: [] };
+  if (!tokens) {
+    return { harnesses: manifest.harnesses, warnings: [], refused: false };
+  }
 
   const known = HARNESSES.map(h => h.id) as string[];
   const unknown = tokens.filter(t => !known.includes(t));
@@ -307,7 +312,7 @@ function packageHarnesses(
       )}, none of which this repository's harnesses allow, so no install command is offered`,
     );
   }
-  return { harnesses, warnings };
+  return { harnesses, warnings, refused: false };
 }
 
 /**
@@ -423,7 +428,9 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
   // repository publishes from inside the pack.
   const MCP_DEPLOYED_DESPITE_TARGETS = ['codex'];
   const mcpHarnessesOf = (pkg: PackageInfo): string[] => {
-    if (!pkg.harnesses.length) return pkg.harnesses;
+    // A pack narrowed to nothing is still read by APM, and its servers still
+    // deploy; only one APM refuses to read offers nothing.
+    if (pkg.refused) return [];
     const allowed = manifest.harnessesExplicit
       ? manifest.harnesses
       : MCP_DEPLOYED_DESPITE_TARGETS;
@@ -502,6 +509,7 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
       version: typeof apm.version === 'string' ? apm.version : undefined,
       score,
       harnesses: declared.harnesses,
+      refused: declared.refused,
       mcp,
     };
     packages.push(info);
