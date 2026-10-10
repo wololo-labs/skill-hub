@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { Box, Typography, makeStyles } from '@material-ui/core';
 import { InfoCard, Link } from '@backstage/core-components';
 import { useApi } from '@backstage/core-plugin-api';
-import { HARNESSES, passedGate } from '@internal/plugin-skill-hub-common';
+import { APM_TARGETS_VERSION, HARNESSES, passedGate } from '@internal/plugin-skill-hub-common';
 import { Asset } from '../model';
 import { skillHubApiRef } from '../api';
 import { CopyCommand } from './CopyCommand';
@@ -200,7 +200,10 @@ export const InstallPanel = ({ asset, stale = false }: InstallPanelProps) => {
         <Typography className={classes.body}>
           This asset publishes no install command. That happens when its path
           contains characters that would not survive being pasted into a shell,
-          or when its pack declares no target that APM recognises.
+          or when none of the targets its pack declares is one this hub offers.
+          The hub's list follows APM {APM_TARGETS_VERSION}, so a target newer
+          than that is the hub's gap to fill, not a mistake in the pack. The
+          sync warnings name the pack and the targets.
         </Typography>
       </InfoCard>
     );

@@ -40,20 +40,11 @@ export const HARNESSES = [
 ] as const;
 
 /**
- * What `targets: all` means to APM: every target it auto-detects. The last
- * three above are explicit-only and are not part of it.
+ * The APM release the list above was taken from. A pack may declare a target
+ * newer than this, so the hub's list is not proof that a target is wrong, only
+ * that the hub has not been taught it. A test pins the list to this version.
  */
-export const APM_ALL_TARGETS: readonly string[] = [
-  'copilot',
-  'claude',
-  'grok-build',
-  'cursor',
-  'opencode',
-  'codex',
-  'gemini',
-  'windsurf',
-  'kiro',
-];
+export const APM_TARGETS_VERSION = '0.33.0';
 
 export type HarnessId = (typeof HARNESSES)[number]['id'];
 
