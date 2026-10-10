@@ -40,6 +40,8 @@ export interface BuildResult {
   counts: Partial<Record<AssetKind, number>>;
   /** Entity references a second glob tried to claim, and lost. */
   collisions: string[];
+  /** Things the owner should fix that did not stop the repository publishing. */
+  warnings: string[];
 }
 
 interface PackageInfo {
@@ -260,19 +262,37 @@ function readPackageScore(
 function packageHarnesses(
   apm: Record<string, unknown>,
   manifest: AgentAssetsManifest,
-): string[] {
-  const declared = declaredTargets(apm);
-  if (!declared) return manifest.harnesses;
+  dir: string,
+): { harnesses: string[]; warnings: string[] } {
+  const { tokens, error } = declaredTargets(apm);
+  const where = dir || '(repository root)';
+  if (error) {
+    // APM refuses to read a manifest like this, so the pack cannot be
+    // installed whatever the hub offers. Falling back to the repository's
+    // harnesses would hand over a command that fails.
+    return {
+      harnesses: [],
+      warnings: [`${where}: apm.yml ${error}, so no install command is offered`],
+    };
+  }
+  if (!tokens) return { harnesses: manifest.harnesses, warnings: [] };
 
+  const known = HARNESSES.map(h => h.id) as string[];
+  const unknown = tokens.filter(t => !known.includes(t));
   // A repository that wrote its own harnesses has limited what it supports,
   // so a pack declaring more does not widen that. One that left it out has
   // only taken the default, which is not a limit on a pack.
-  const allowed = manifest.harnessesExplicit
-    ? manifest.harnesses
-    : HARNESSES.map(h => h.id);
-  return HARNESSES.map(h => h.id).filter(
-    id => declared.includes(id) && allowed.includes(id),
-  );
+  const allowed = manifest.harnessesExplicit ? manifest.harnesses : known;
+  return {
+    harnesses: known.filter(id => tokens.includes(id) && allowed.includes(id)),
+    warnings: unknown.length
+      ? [
+          `${where}: apm.yml declares targets this hub does not know (${unknown.join(
+            ', ',
+          )}), so they are not offered`,
+        ]
+      : [],
+  };
 }
 
 /**
@@ -284,28 +304,45 @@ const MANIFEST_TARGET_ALIASES: Record<string, string> = { vscode: 'copilot' };
 
 /**
  * The targets a package declares, read the way APM reads them
- * (`apm_cli/core/apm_yml.py`, the same in 0.29.0 and 0.33.0), or undefined
- * when it declares none and so does not restrict anything.
+ * (`apm_cli/core/apm_yml.py`, the same in 0.29.0 and 0.33.0). `tokens` is
+ * undefined when it declares none and so restricts nothing; `error` is set
+ * when APM would refuse the manifest outright.
  *
- * Under `targets` a lone value is one target. Under the singular `target` a
- * string may be comma separated. Tokens are trimmed and compared exactly: APM
- * is case sensitive, so a spelling it would reject is not normalised into one
- * it would accept. `all` folds to no restriction, which is what omitting the
- * field means.
+ * Under `targets` a lone value is one target, and an empty or missing value is
+ * an error. Under the singular `target` a string may be comma separated and an
+ * empty value means nothing declared. Tokens are trimmed and compared
+ * exactly: APM is case sensitive, so a spelling it would reject is not
+ * normalised into one it would accept. `all` folds to no restriction, which is
+ * what omitting the field means.
  */
-function declaredTargets(apm: Record<string, unknown>): string[] | undefined {
-  const raw = apm.targets ?? apm.target;
-  if (raw === undefined || raw === null) return undefined;
+function declaredTargets(apm: Record<string, unknown>): {
+  tokens?: string[];
+  error?: string;
+} {
+  const hasTargets = 'targets' in apm;
+  const hasTarget = 'target' in apm;
+  if (hasTargets && hasTarget) return { error: 'declares both targets and target' };
+  if (!hasTargets && !hasTarget) return {};
 
+  const key = hasTargets ? 'targets' : 'target';
+  const raw = apm[key];
   let tokens: string[];
   if (Array.isArray(raw)) {
     tokens = raw.map(String);
+  } else if (raw === null || raw === undefined) {
+    tokens = [];
+  } else if (typeof raw === 'object') {
+    return { error: `${key} must be a list or a single target` };
   } else {
-    tokens = apm.targets !== undefined ? [String(raw)] : String(raw).split(',');
+    tokens = hasTargets ? [String(raw)] : String(raw).split(',');
   }
   tokens = tokens.map(t => t.trim()).filter(Boolean);
-  if (!tokens.length || tokens.includes('all')) return undefined;
-  return tokens.map(t => MANIFEST_TARGET_ALIASES[t] ?? t);
+
+  if (!tokens.length) {
+    return hasTargets ? { error: 'has an empty targets list' } : {};
+  }
+  if (tokens.includes('all')) return {};
+  return { tokens: tokens.map(t => MANIFEST_TARGET_ALIASES[t] ?? t) };
 }
 
 /**
@@ -340,6 +377,7 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
 
   const counts: Partial<Record<AssetKind, number>> = {};
   const collisions: string[] = [];
+  const warnings: string[] = [];
 
   // Two globs can name the same asset twice, most obviously when a repository
   // publishes both a pack and the files inside it. First match wins and the
@@ -411,12 +449,14 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
         ) as Array<Record<string, unknown>>)
       : [];
 
+    const declared = packageHarnesses(apm, manifest, dir);
+    warnings.push(...declared.warnings);
     const info: PackageInfo = {
       dir,
       name: entityName(name),
       version: typeof apm.version === 'string' ? apm.version : undefined,
       score,
-      harnesses: packageHarnesses(apm, manifest),
+      harnesses: declared.harnesses,
       mcp,
     };
     packages.push(info);
@@ -652,7 +692,7 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
     }
   }
 
-  return { entities: [...byRef.values()], counts, collisions };
+  return { entities: [...byRef.values()], counts, collisions, warnings };
 }
 
 function scoreAnnotations(

@@ -273,7 +273,7 @@ publish:
 
   describe('which harnesses a pack is offered for', () => {
     const pack = async (apmYaml: string, harnesses = '') => {
-      const { entities } = await buildEntities({
+      const { entities, warnings } = await buildEntities({
         repo: REPO,
         commitSha: SHA,
         manifest: parseManifest(
@@ -287,6 +287,7 @@ publish:
       return {
         system: find(entities, 'System', 'p')!,
         skill: find(entities, 'AiResource', 's')!,
+        warnings,
       };
     };
 
@@ -362,6 +363,33 @@ publish:
         const { system } = await pack(`name: p\ntargets: [${bad}]\n`);
         expect(readHarnesses(system)).toEqual([]);
       }
+    });
+
+    it.each([
+      ['an empty list', 'targets: []'],
+      ['no value', 'targets:'],
+      ['both keys at once', 'targets: [claude]\ntarget: claude'],
+      ['a mapping', 'targets:\n  claude: true'],
+    ])('treats %s as a declaration error, offers nothing and says so', async (_, yaml) => {
+      // APM refuses to read a manifest like this at all, so the pack cannot be
+      // installed whatever the hub offers. Falling back to the repository's
+      // harnesses would hand over a command that fails.
+      const { system, warnings } = await pack(`name: p\n${yaml}\n`);
+      expect(readHarnesses(system)).toEqual([]);
+      expect(readInstallCommands(system)).toEqual({});
+      expect(warnings).toEqual([expect.stringContaining('packages/p')]);
+    });
+
+    it('still treats an empty singular target as no declaration, as APM does', async () => {
+      const { system, warnings } = await pack('name: p\ntarget:\n');
+      expect(readHarnesses(system)).toEqual(['claude', 'copilot', 'codex']);
+      expect(warnings).toEqual([]);
+    });
+
+    it('offers the targets it knows and names the ones it does not', async () => {
+      const { system, warnings } = await pack('name: p\ntargets: [claude, brand-new]\n');
+      expect(readHarnesses(system)).toEqual(['claude']);
+      expect(warnings).toEqual([expect.stringContaining('brand-new')]);
     });
 
     it('offers nothing for a declaration naming only unknown targets', async () => {
