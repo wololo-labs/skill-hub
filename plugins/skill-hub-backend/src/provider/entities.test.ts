@@ -737,6 +737,23 @@ publish:
     expect(collisions).toEqual(['AiResource:wololo-labs-estate/tdd']);
   });
 
+  it('lets a failed read of apm.yml propagate, so the provider can carry the repository forward', async () => {
+    // A fetch error is not a parse error: refusing the pack for it would
+    // publish a refused pack in place of a good one on a transient failure.
+    const build = buildEntities({
+      repo: REPO,
+      commitSha: SHA,
+      manifest: parseManifest(
+        'owner: team\npublish:\n  packages: packages/*/apm.yml\n',
+      ),
+      tree: [{ path: 'packages/p/apm.yml', sha: 'x', type: 'blob' }],
+      read: async () => {
+        throw new Error('GitHub 502');
+      },
+    });
+    await expect(build).rejects.toThrow('GitHub 502');
+  });
+
   it('survives an unreadable asset without dropping the rest', async () => {
     const { entities, warnings } = await buildEntities({
       repo: REPO,

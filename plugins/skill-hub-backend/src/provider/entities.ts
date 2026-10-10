@@ -571,8 +571,12 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
     let apm: Record<string, unknown>;
     // Why APM would refuse to read this pack at all, when it would.
     let refusal: string | undefined;
+    // A failed read is not a parse failure and is not caught here: it
+    // propagates so the provider carries the repository forward, instead of
+    // publishing a refused pack in place of a good one on a transient error.
+    const source = await read(path);
     try {
-      const parsed = parseYaml(await read(path)) ?? {};
+      const parsed = parseYaml(source) ?? {};
       if (typeof parsed === 'object' && !Array.isArray(parsed)) {
         apm = parsed as Record<string, unknown>;
       } else {
