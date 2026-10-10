@@ -410,6 +410,25 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
     },
   };
 
+  // A pack's own targets restrict its primitives but not an MCP server it
+  // depends on: `apm install --target codex` on a pack declaring
+  // [claude, copilot] skips the pack and still writes the server to
+  // .codex/config.toml (docs/INSTALL-PROOF.md, APM 0.29.0 and 0.33.0). Only
+  // codex is evidenced, so only codex is added, and only where the repository
+  // has not narrowed it away. A pack APM refuses to read offers nothing.
+  const MCP_DEPLOYED_DESPITE_TARGETS = ['codex'];
+  const mcpHarnessesOf = (pkg: PackageInfo): string[] => {
+    if (!pkg.harnesses.length) return pkg.harnesses;
+    const allowed = manifest.harnessesExplicit
+      ? manifest.harnesses
+      : MCP_DEPLOYED_DESPITE_TARGETS;
+    return HARNESSES.map(h => h.id as string).filter(
+      id =>
+        pkg.harnesses.includes(id) ||
+        (MCP_DEPLOYED_DESPITE_TARGETS.includes(id) && allowed.includes(id)),
+    );
+  };
+
   const base = (
     path: string,
     kind: 'blob' | 'tree',
@@ -530,13 +549,13 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
           } transport).`,
           tags,
           annotations: {
-            ...base(path, 'blob', path, info.harnesses),
+            ...base(path, 'blob', path, mcpHarnessesOf(info)),
             ...(score
               ? { [ANNOTATION_EVAL_SCORE]: JSON.stringify(score) }
               : {}),
             [ANNOTATION_EVAL_SCORE_REF]: `system:${namespace}/${info.name}`,
             [ANNOTATION_INSTALL]: JSON.stringify(
-              installCommands(repo, commitSha, info.harnesses, {
+              installCommands(repo, commitSha, mcpHarnessesOf(info), {
                 kind: 'package',
                 dir,
               }),
@@ -606,7 +625,7 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
       continue;
     }
     const pkg = owningPackage(path);
-    const harnesses = harnessesOf(pkg);
+    const harnesses = pkg ? mcpHarnessesOf(pkg) : harnessesOf(pkg);
     const name = typeof server.name === 'string' ? server.name : stem(path);
     entities.push({
       apiVersion: 'backstage.io/v1alpha1',

@@ -285,6 +285,7 @@ publish:
         }),
       });
       return {
+        entities,
         system: find(entities, 'System', 'p')!,
         skill: find(entities, 'AiResource', 's')!,
         warnings,
@@ -323,6 +324,36 @@ publish:
       expect(outside.warnings).toEqual([
         expect.stringMatching(/packages\/p.*cursor.*no install command/),
       ]);
+    });
+
+    describe('an MCP server the pack depends on', () => {
+      // docs/INSTALL-PROOF.md: on a pack declaring [claude, copilot], APM
+      // skips the pack's primitives for --target codex but still reports
+      // "1 MCP server" and writes it to .codex/config.toml. So the Codex
+      // command does deliver something for the server, and only for it.
+      const withMcp = (harnesses = '') =>
+        pack(
+          'name: p\ntargets: [claude, copilot]\ndependencies:\n  mcp:\n    - name: runner\n      transport: stdio\n',
+          harnesses,
+        );
+      const server = (entities: Entity[]) => find(entities, 'API', 'runner')!;
+
+      it('keeps the codex command, which APM still deploys the server for', async () => {
+        const { entities } = await withMcp();
+        expect(readHarnesses(server(entities))).toEqual(['claude', 'copilot', 'codex']);
+        expect(readInstallCommands(server(entities)).codex).toContain('--target codex');
+      });
+
+      it('still leaves codex off the pack and its skills', async () => {
+        const { system, skill } = await withMcp();
+        expect(readHarnesses(system)).toEqual(['claude', 'copilot']);
+        expect(readHarnesses(skill)).toEqual(['claude', 'copilot']);
+      });
+
+      it('does not add codex when the repository has narrowed it away', async () => {
+        const { entities } = await withMcp('harnesses: [claude, copilot]\n');
+        expect(readHarnesses(server(entities))).toEqual(['claude', 'copilot']);
+      });
     });
 
     it('falls back to the repository manifest when the pack declares nothing', async () => {
