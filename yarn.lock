@@ -4515,7 +4515,6 @@ __metadata:
     "@backstage/frontend-plugin-api": "npm:^0.18.0"
     "@backstage/frontend-test-utils": "npm:^0.6.3"
     "@backstage/plugin-catalog-react": "npm:^3.2.2"
-    "@backstage/test-utils": "npm:^1.7.21"
     "@internal/plugin-skill-hub-common": "workspace:^"
     "@material-ui/core": "npm:^4.12.2"
     "@material-ui/icons": "npm:^4.9.1"

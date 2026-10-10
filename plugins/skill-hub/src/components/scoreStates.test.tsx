@@ -1,8 +1,8 @@
 import '@testing-library/jest-dom';
 import { ReactNode } from 'react';
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import { ThemeProvider, createTheme } from '@material-ui/core';
-import { TestApiProvider, wrapInTestApp } from '@backstage/test-utils';
+import { renderInTestApp } from '@backstage/frontend-test-utils';
 import { EvalScore, readEvalScore } from '@internal/plugin-skill-hub-common';
 import { Asset } from '../model';
 import { skillHubApiRef } from '../api';
@@ -59,23 +59,22 @@ const asset = (score?: EvalScore): Asset =>
 const api = { getAssetBody: jest.fn(), recordCopy: jest.fn() };
 
 const wrap = (node: ReactNode) =>
-  render(
-    wrapInTestApp(
-      <ThemeProvider
-        theme={createTheme({
-          palette: {
-            highlight: '#eef',
-            warningBackground: '#fed',
-            warningText: '#630',
-            infoText: '#223',
-            textSubtle: '#666',
-            status: { ok: '#2a2', error: '#c22', warning: '#a60' },
-          } as any,
-        })}
-      >
-        <TestApiProvider apis={[[skillHubApiRef, api]]}>{node}</TestApiProvider>
-      </ThemeProvider>,
-    ),
+  renderInTestApp(
+    <ThemeProvider
+      theme={createTheme({
+        palette: {
+          highlight: '#eef',
+          warningBackground: '#fed',
+          warningText: '#630',
+          infoText: '#223',
+          textSubtle: '#666',
+          status: { ok: '#2a2', error: '#c22', warning: '#a60' },
+        } as any,
+      })}
+    >
+      {node}
+    </ThemeProvider>,
+    { apis: [[skillHubApiRef, api]] },
   );
 
 const command = () => screen.queryByText(/apm install/);
