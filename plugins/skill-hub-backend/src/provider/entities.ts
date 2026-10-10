@@ -177,7 +177,7 @@ function readGateReport(reportJson: string): EvalScore | undefined {
 
   const text = (value: unknown) =>
     typeof value === 'string' && value ? value : undefined;
-  const commit = text(report.subject?.commit);
+  const commit = text(report.subject?.commit)?.trim().toLowerCase();
   const num = (value: unknown) =>
     typeof value === 'number' && Number.isFinite(value) ? value : undefined;
   const flag = (value: unknown) =>

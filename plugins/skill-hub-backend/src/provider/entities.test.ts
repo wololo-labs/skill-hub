@@ -268,6 +268,32 @@ publish:
     expect(isInstallable(entities[0])).toBe(false);
   });
 
+  describe('the commit a score was measured at', () => {
+    const measuredAs = async (commit: string) => {
+      const { entities } = await buildEntities({
+        repo: REPO,
+        commitSha: SHA,
+        manifest: parseManifest(
+          'owner: team\npublish:\n  packages: packages/*/apm.yml\n',
+        ),
+        ...repository({
+          'packages/p/apm.yml': 'name: p\nversion: 0.1.0\n',
+          'packages/p/eval-gate-report.json': JSON.stringify({
+            verdict: 'pass',
+            signals: [],
+            subject: { commit },
+          }),
+        }),
+      });
+      return readEvalScore(entities[0])!.measuredCommit;
+    };
+
+    it('lower cases an upper case sha instead of dropping it', async () => {
+      expect(await measuredAs('B'.repeat(40))).toBe('b'.repeat(40));
+    });
+
+  });
+
   describe('the statistics in the gate report', () => {
     const build = async (report: string) => {
       const { entities } = await buildEntities({

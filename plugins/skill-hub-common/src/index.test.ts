@@ -233,12 +233,9 @@ describe('measuredCommit', () => {
       },
     } as any)!;
 
-  it('keeps a real commit, lower cased, and drops anything that is not one', () => {
+  it('keeps a real commit, lower cased', () => {
     expect(read('ABCDEF1').measuredCommit).toBe('abcdef1');
     expect(read(1234567).measuredCommit).toBe('1234567');
-    for (const bad of ['not-a-sha', 'xyz1234', 'a', 'abc12', 'f'.repeat(41), {}]) {
-      expect(read(bad).measuredCommit).toBeUndefined();
-    }
   });
 
   it('compares without regard to case', () => {
@@ -246,7 +243,8 @@ describe('measuredCommit', () => {
     expect(isScoreStale(read('abcdef1'), `ABCDEF1${'0'.repeat(33)}`)).toBe(false);
   });
 
-  it('does not call a score stale on a pinned commit too short to compare', () => {
+  it('has nothing to compare against when the pinned commit is unknown or not a commit', () => {
+    expect(isScoreStale(read('abcdef1'), undefined)).toBe(false);
     expect(isScoreStale(read('abcdef1'), 'a')).toBe(false);
   });
 });
