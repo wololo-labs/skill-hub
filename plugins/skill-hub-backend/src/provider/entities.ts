@@ -268,11 +268,8 @@ function packageHarnesses(
   );
   if (!declared.length) return fallback;
 
-  const known = new Set<string>(HARNESSES.map(h => h.id));
   const wanted = declared.flatMap(t => (t === 'all' ? APM_ALL_TARGETS : [t]));
-  return HARNESSES.map(h => h.id).filter(
-    id => wanted.includes(id) && known.has(id),
-  );
+  return HARNESSES.map(h => h.id).filter(id => wanted.includes(id));
 }
 
 /**
