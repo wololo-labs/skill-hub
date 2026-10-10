@@ -117,6 +117,23 @@ describe('the four score states', () => {
     expect(screen.getByText(/the asset regressed/)).toBeInTheDocument();
   });
 
+  it('a pass that is measurably worse: regressed, and no install control', async () => {
+    const worse: EvalScore = {
+      verdict: 'PASS',
+      measuredCommit: PINNED,
+      stats: { ...ci, significantImprovement: false, significantRegression: true },
+    };
+    wrap(
+      <>
+        <ScoreBadge score={worse} pinnedCommit={PINNED} />
+        <InstallPanel asset={asset(worse)} />
+      </>,
+    );
+    expect(await screen.findAllByText('regressed')).not.toHaveLength(0);
+    expect(command()).not.toBeInTheDocument();
+    expect(screen.queryByRole('radiogroup')).toBeNull();
+  });
+
   it('unscored: says so and has no install control', async () => {
     wrap(
       <>

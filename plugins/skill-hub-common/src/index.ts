@@ -81,7 +81,11 @@ export type ScoreState =
 export function scoreState(score: EvalScore | undefined): ScoreState {
   if (!score) return 'unscored';
   const verdict = (score.verdict ?? '').toUpperCase();
-  if (verdict === 'REGRESSION') return 'regressed';
+  // A pass the gate itself measured as significantly worse is a regression,
+  // whatever the verdict string says.
+  if (verdict === 'REGRESSION' || score.stats?.significantRegression === true) {
+    return 'regressed';
+  }
   if (verdict !== 'PASS') return 'failed';
   return score.stats?.significantImprovement === true ? 'gain' : 'no-gain';
 }
@@ -205,10 +209,14 @@ export function readHarnesses(entity: Entity): string[] {
 /**
  * Whether a score records a gate that passed. A report with no verdict has not
  * said the asset works, so it reads the same as a failure: the surfaces treat
- * anything other than PASS as a failed gate, and so does the install gate.
+ * anything other than PASS as a failed gate, and so does the install gate. A
+ * pass the gate measured as significantly worse is not a pass either.
  */
 export function passedGate(score: EvalScore | undefined): boolean {
-  return (score?.verdict ?? '').toUpperCase() === 'PASS';
+  return (
+    (score?.verdict ?? '').toUpperCase() === 'PASS' &&
+    score?.stats?.significantRegression !== true
+  );
 }
 
 /**

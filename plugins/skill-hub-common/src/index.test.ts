@@ -1,4 +1,4 @@
-import { EvalScore, isScoreStale, readEvalScore, scoreState } from './index';
+import { EvalScore, isScoreStale, passedGate, readEvalScore, scoreState } from './index';
 
 const stats = (significantImprovement: boolean) => ({
   meanDelta: 0.0003,
@@ -11,6 +11,15 @@ const stats = (significantImprovement: boolean) => ({
 describe('scoreState', () => {
   it('is a gain only for a pass with a significant improvement', () => {
     expect(scoreState({ verdict: 'PASS', stats: stats(true) })).toBe('gain');
+  });
+
+  it('reads a pass that is measurably worse as regressed, and not installable', () => {
+    const score = {
+      verdict: 'PASS',
+      stats: { ...stats(false), significantRegression: true },
+    };
+    expect(scoreState(score)).toBe('regressed');
+    expect(passedGate(score)).toBe(false);
   });
 
   it('is no demonstrated gain for a pass without one', () => {
