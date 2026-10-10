@@ -330,7 +330,7 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
     path: string,
     kind: 'blob' | 'tree',
     bodyPath?: string,
-    harnesses: string[] = manifest.harnesses,
+    harnesses: string[],
   ) => ({
     [ANNOTATION_SOURCE_LOCATION]: `url:${sourceUrl(repo, commitSha, path, kind)}`,
     'backstage.io/managed-by-location': `url:${sourceUrl(repo, commitSha, '.agent-assets.yaml', 'blob')}`,
