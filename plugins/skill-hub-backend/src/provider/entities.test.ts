@@ -292,6 +292,34 @@ publish:
       expect(await measuredAs('B'.repeat(40))).toBe('b'.repeat(40));
     });
 
+    it('keeps a tag as written, so the score is stale and says what it was taken at', async () => {
+      expect(await measuredAs('v1.2.0')).toBe('v1.2.0');
+    });
+
+    it('keeps the tag a catalogue file was published from', async () => {
+      const { entities } = await buildEntities({
+        repo: REPO,
+        commitSha: SHA,
+        manifest: parseManifest(
+          'owner: team\npublish:\n  packages: packages/*/apm.yml\n',
+        ),
+        ...repository({
+          'packages/p/apm.yml': 'name: p\nversion: 0.1.0\n',
+          'packages/p/catalog-info.yaml': [
+            'apiVersion: backstage.io/v1alpha1',
+            'kind: System',
+            'metadata:',
+            '  name: p',
+            '  annotations:',
+            `    ${ANNOTATION_SOURCE_LOCATION}: url:https://github.com/wololo-labs/estate/tree/v1.2.0/packages/p/`,
+            `    ${ANNOTATION_EVAL_SCORE}: '{"verdict":"PASS"}'`,
+            'spec:',
+            '  owner: user:x',
+          ].join('\n'),
+        }),
+      });
+      expect(readEvalScore(entities[0])!.measuredCommit).toBe('v1.2.0');
+    });
   });
 
   describe('the statistics in the gate report', () => {

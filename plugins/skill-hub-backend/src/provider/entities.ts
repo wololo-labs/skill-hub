@@ -177,7 +177,13 @@ function readGateReport(reportJson: string): EvalScore | undefined {
 
   const text = (value: unknown) =>
     typeof value === 'string' && value ? value : undefined;
-  const commit = text(report.subject?.commit)?.trim().toLowerCase();
+  // A sha is lower cased, and anything else (a tag, a branch) is kept as it was
+  // written: dropping it would make a score taken at v1.2.0 read as current.
+  const written = text(report.subject?.commit)?.trim();
+  const commit =
+    written && /^[0-9a-f]{7,40}$/i.test(written)
+      ? written.toLowerCase()
+      : written;
   const num = (value: unknown) =>
     typeof value === 'number' && Number.isFinite(value) ? value : undefined;
   const flag = (value: unknown) =>
@@ -208,9 +214,7 @@ function readGateReport(reportJson: string): EvalScore | undefined {
     sourceVisibility: text(report.sourceVisibility),
     ...(Object.keys(metrics).length ? { metrics } : {}),
     ...(Object.keys(stats).length ? { stats } : {}),
-    ...(commit && /^[0-9a-f]{7,40}$/.test(commit)
-      ? { measuredCommit: commit }
-      : {}),
+    ...(commit ? { measuredCommit: commit } : {}),
   };
 }
 
@@ -239,7 +243,7 @@ function readPackageScore(
         const score = JSON.parse(raw) as EvalScore;
         const location =
           entity?.metadata?.annotations?.[ANNOTATION_SOURCE_LOCATION];
-        const measured = /\/(?:tree|blob)\/([0-9a-f]{7,40})\//.exec(
+        const measured = /\/(?:tree|blob)\/([^/]+)\//.exec(
           location ?? '',
         )?.[1];
         return measured ? { ...score, measuredCommit: measured } : score;

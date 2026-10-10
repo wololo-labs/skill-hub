@@ -179,6 +179,14 @@ describe('staleness', () => {
     ).toBeInTheDocument();
   });
 
+  it('shows a score taken at a tag as stale, with the tag as written', async () => {
+    const score = { ...SCORES['no gain']!, measuredCommit: 'v1.2.0' };
+    wrap(<ScoreBadge score={score} pinnedCommit={PINNED} />);
+    expect(
+      await screen.findByText(`stale: scored at v1.2.0, pinned ${PINNED.slice(0, 7)}`),
+    ).toBeInTheDocument();
+  });
+
   it('shows nothing extra when the commits match', async () => {
     wrap(<ScoreBadge score={SCORES.gain} pinnedCommit={PINNED} />);
     await screen.findAllByText('measured gain');

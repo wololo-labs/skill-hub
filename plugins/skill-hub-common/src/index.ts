@@ -144,13 +144,14 @@ export function isScoreStale(
 ): boolean {
   const measured = score?.measuredCommit?.toLowerCase();
   const pinned = pinnedCommit?.toLowerCase();
-  // Too short to be a commit on either side is nothing to compare, not a
-  // difference: a one character prefix would match or mismatch by luck.
-  if (!measured || !pinned) return false;
-  if (measured.length < SHORTEST_COMMIT || pinned.length < SHORTEST_COMMIT) {
-    return false;
-  }
-  return !pinned.startsWith(measured) && !measured.startsWith(pinned);
+  // Nothing to compare against when either side is unknown, or the pinned
+  // commit is too short to be one.
+  if (!measured || !pinned || pinned.length < SHORTEST_COMMIT) return false;
+  // Only a commit that is a full or prefix match of the pinned one is current.
+  // A tag, a branch or a stub too short to identify a commit is not a match
+  // and stays stale, shown as written.
+  const isCommit = /^[0-9a-f]{7,40}$/.test(measured);
+  return !isCommit || (!pinned.startsWith(measured) && !measured.startsWith(pinned));
 }
 
 /** Install command per harness, keyed by harness id. */
@@ -167,10 +168,11 @@ const finite = (value: unknown) =>
   typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 const commitOf = (value: unknown): string | undefined => {
   const candidate = typeof value === 'number' ? String(value) : value;
-  return typeof candidate === 'string' &&
-    /^[0-9a-f]{7,40}$/i.test(candidate.trim())
-    ? candidate.trim().toLowerCase()
-    : undefined;
+  if (typeof candidate !== 'string' || !candidate.trim()) return undefined;
+  const written = candidate.trim();
+  // A sha is lower cased. Anything else (a tag, a branch) is kept as written,
+  // because dropping it would make a score taken at v1.2.0 read as current.
+  return /^[0-9a-f]{7,40}$/i.test(written) ? written.toLowerCase() : written;
 };
 const shown = (value: unknown) =>
   finite(value) ?? (typeof value === 'string' ? value : undefined);

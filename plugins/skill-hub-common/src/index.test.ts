@@ -233,9 +233,23 @@ describe('measuredCommit', () => {
       },
     } as any)!;
 
-  it('keeps a real commit, lower cased', () => {
+  it('keeps a real commit lower cased, and anything else as the text it was written as', () => {
     expect(read('ABCDEF1').measuredCommit).toBe('abcdef1');
     expect(read(1234567).measuredCommit).toBe('1234567');
+    // A tag or a branch is not a commit, and dropping it would make the score
+    // read as current. It is kept so staleness can be shown with the value.
+    expect(read('v1.2.0').measuredCommit).toBe('v1.2.0');
+    expect(read('main').measuredCommit).toBe('main');
+    expect(read({}).measuredCommit).toBeUndefined();
+  });
+
+  it('stays stale unless it is a full or prefix match of the pinned commit', () => {
+    const pinned = `abcdef1${'0'.repeat(33)}`;
+    for (const measured of ['v1.2.0', 'main', 'abc12', 'a', 'fedcba9']) {
+      expect(isScoreStale(read(measured), pinned)).toBe(true);
+    }
+    expect(isScoreStale(read('abcdef1'), pinned)).toBe(false);
+    expect(isScoreStale(read(pinned), pinned)).toBe(false);
   });
 
   it('compares without regard to case', () => {
