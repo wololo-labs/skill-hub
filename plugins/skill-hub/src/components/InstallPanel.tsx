@@ -4,6 +4,7 @@ import { InfoCard, Link } from '@backstage/core-components';
 import { useApi } from '@backstage/core-plugin-api';
 import {
   HARNESSES,
+  isMeasuredWorse,
   passedGate,
   ScoreState,
   scoreState,
@@ -182,7 +183,15 @@ export interface InstallPanelProps {
 function blocked(
   state: ScoreState,
   passed: boolean,
+  measuredWorse: boolean,
 ): { title: string; body: string } {
+  if (measuredWorse) {
+    return {
+      title:
+        'Install is blocked: the asset measured worse than the model alone',
+      body: "It passed the gate's own threshold, but the measurement shows it significantly worse than the model without it, so the command is withheld. Fix the asset and publish a report that does not show a regression, and it becomes installable on the next sync.",
+    };
+  }
   if (state === 'regressed' || state === 'failed') {
     return {
       title:
@@ -236,7 +245,7 @@ export const InstallPanel = ({ asset, stale = false }: InstallPanelProps) => {
   const passed = passedGate(asset.score);
   const state = scoreState(asset.score);
   const installable = passed && (!stale || acknowledged);
-  const message = blocked(state, passed);
+  const message = blocked(state, passed, isMeasuredWorse(asset.score));
   // Install stays open for a pass that shows no gain, because the asset is not
   // broken, but the reader is told in as many words what the score does not say.
   const noGain = state === 'no-gain';

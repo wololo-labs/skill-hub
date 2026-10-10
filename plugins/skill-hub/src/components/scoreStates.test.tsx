@@ -140,6 +140,13 @@ describe('the four score states', () => {
     expect(await screen.findAllByText('regressed')).not.toHaveLength(0);
     expect(command()).not.toBeInTheDocument();
     expect(screen.queryByRole('radiogroup')).toBeNull();
+    // It did pass the gate, so the copy must not say it did not.
+    expect(screen.getByText(/measured significantly worse/)).toBeInTheDocument();
+    expect(screen.queryByText(/did not pass/)).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/passed its gate, but measured significantly worse/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Eval gate PASS: regressed/)).toBeNull();
   });
 
   it('unscored: says so and has no install control', async () => {

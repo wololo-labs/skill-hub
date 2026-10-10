@@ -2,6 +2,7 @@ import { Tooltip, makeStyles } from '@material-ui/core';
 import {
   EvalScore,
   describeVerdict,
+  isMeasuredWorse,
   isScoreStale,
   scoreState,
 } from '@internal/plugin-skill-hub-common';
@@ -176,9 +177,12 @@ export const ScoreBadge = ({
         headline.baseline
       } baseline, recorded ${score.recorded ?? 'on an unknown date'}.`
     : '';
-  const explanation = verdict
-    ? `Eval gate ${verdict}: ${label}.${interval}${measured}`
-    : `Eval gate report has no verdict, so it counts as a failed gate.${measured}`;
+  let explanation = `Eval gate report has no verdict, so it counts as a failed gate.${measured}`;
+  if (isMeasuredWorse(score)) {
+    explanation = `Eval gate ${verdict}: it passed its gate, but measured significantly worse than the model alone.${interval}${measured}`;
+  } else if (verdict) {
+    explanation = `Eval gate ${verdict}: ${label}.${interval}${measured}`;
+  }
 
   // The score is never hidden for being old, only dated: both commits sit
   // beside the badge so the reader can see exactly how far apart they are.
