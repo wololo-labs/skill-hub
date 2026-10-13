@@ -1,0 +1,210 @@
+skill-hub third-party notices
+
+caniuse-lite@1.0.30001810 by Ben Briggs is licensed under CC-BY-4.0.
+https://creativecommons.org/licenses/by/4.0/
+
+The following packages include this notice: @asyncapi/specs@6.11.1
+
+Copyright 2016-2025 AsyncAPI Initiative
+
+This product includes software developed at
+AsyncAPI Initiative (http://www.asyncapi.com/).
+
+The following packages include this notice: @swagger-api/apidom-ast@1.12.0, @swagger-api/apidom-core@1.12.0, @swagger-api/apidom-error@1.12.0, @swagger-api/apidom-json-pointer@1.12.0, @swagger-api/apidom-ns-a2a-1@1.12.0, @swagger-api/apidom-ns-api-design-systems@1.12.0, @swagger-api/apidom-ns-arazzo-1@1.12.0, @swagger-api/apidom-ns-asyncapi-2@1.12.0, @swagger-api/apidom-ns-json-schema-2019-09@1.12.0, @swagger-api/apidom-ns-json-schema-2020-12@1.12.0, @swagger-api/apidom-ns-json-schema-draft-4@1.12.0, @swagger-api/apidom-ns-json-schema-draft-6@1.12.0, @swagger-api/apidom-ns-json-schema-draft-7@1.12.0, @swagger-api/apidom-ns-openapi-2@1.12.0, @swagger-api/apidom-ns-openapi-3-0@1.12.0, @swagger-api/apidom-ns-openapi-3-1@1.12.0, @swagger-api/apidom-ns-openapi-3-2@1.12.0, @swagger-api/apidom-parser-adapter-a2a-json-1@1.12.0, @swagger-api/apidom-parser-adapter-a2a-yaml-1@1.12.0, @swagger-api/apidom-parser-adapter-api-design-systems-json@1.12.0, @swagger-api/apidom-parser-adapter-api-design-systems-yaml@1.12.0, @swagger-api/apidom-parser-adapter-arazzo-json-1@1.12.0, @swagger-api/apidom-parser-adapter-arazzo-yaml-1@1.12.0, @swagger-api/apidom-parser-adapter-asyncapi-json-2@1.12.0, @swagger-api/apidom-parser-adapter-asyncapi-json-3@1.12.0, @swagger-api/apidom-parser-adapter-asyncapi-yaml-2@1.12.0, @swagger-api/apidom-parser-adapter-asyncapi-yaml-3@1.12.0, @swagger-api/apidom-parser-adapter-json@1.12.0, @swagger-api/apidom-parser-adapter-openapi-json-2@1.12.0, @swagger-api/apidom-parser-adapter-openapi-json-3-0@1.12.0, @swagger-api/apidom-parser-adapter-openapi-json-3-1@1.12.0, @swagger-api/apidom-parser-adapter-openapi-json-3-2@1.12.0, @swagger-api/apidom-parser-adapter-openapi-yaml-2@1.12.0, @swagger-api/apidom-parser-adapter-openapi-yaml-3-0@1.12.0, @swagger-api/apidom-parser-adapter-openapi-yaml-3-1@1.12.0, @swagger-api/apidom-parser-adapter-openapi-yaml-3-2@1.12.0, @swagger-api/apidom-parser-adapter-yaml-1-2@1.12.0, @swagger-api/apidom-reference@1.12.0
+
+ApiDOM
+Copyright 2020 SmartBear Software Inc.
+ApiDOM is licensed under Apache 2.0 license.
+Copy of the Apache 2.0 license can be found in `LICENSES/Apache-2.0.txt` file.
+
+json-schema-ref-parser
+Copyright (c) 2015 James Messinger
+File packages/apidom-reference/src/util/url.ts (the file) was originally created under MIT license in https://github.com/APIDevTools/json-schema-ref-parser repository.
+The file has been copied into this project and modified. All modifications are licensed under Apache 2.0 License.
+Copy of the MIT license can be found in `LICENSES/MIT.txt` file.
+
+graphql-js
+Copyright (c) GraphQL Contributors
+File packages/apidom-ast/src/traversal/visitor.ts (the file) was originally created under MIT license in https://github.com/graphql/graphql-js repository.
+The file has been copied into this project and modified. All modifications are licensed under Apache 2.0 License.
+Copy of the MIT license can be found in `LICENSES/MIT.txt` file.
+
+babel-plugin-add-import-extension
+Copyright (c) 2019 Karl Prieb
+File scripts/babel-plugin-add-import-extension.cjs (the file) was originally created under MIT license in https://codeberg.org/karl/babel-plugin-add-import-extension.
+The file has been copied into this project and modified. All modifications are licensed under Apache 2.0 License.
+Copy of the MIT license can be found in `LICENSES/MIT.txt` file.
+
+refract-spec
+Copyright (c) 2015 refractproject
+Specific texts in README.md (the file) were originally created under MIT license in https://github.com/refractproject/refract-spec repository.
+Specific texts have been copied into this project and modified. All modifications are licensed under Apache 2.0 License.
+Copy of the MIT license can be found in `LICENSES/MIT.txt` file.
+
+api-elements
+Copyright (c) 2015 Apiary Inc.
+Specific texts in README.md (the file) were originally created under MIT license in https://github.com/refractproject/refract-spec repository.
+Specific texts have been copied into this project and modified. All modifications are licensed under Apache 2.0 License.
+Copy of the MIT license can be found in `LICENSES/MIT.txt` file.
+
+deepmerge
+Copyright (c) 2012 James Halliday, Josh Duff, and other contributors
+- File packages/apidom-core/src/deepmerge.ts contains algorithms that we originally created
+  in https://github.com/TehShrike/deepmerge/blob/master/index.js to handle deep merging of JavaScript Objects and Arrays.
+  These algorithms have been reverse engineered and adapted to support deep merging of ApiDOM structures.
+- File packages/apidom-core/test/deepmerge.ts contains tests and fixtures that were originally created
+  in https://github.com/TehShrike/deepmerge/blob/master/test/merge.js to test deep merging of JavaScript Objects and Arrays.
+  These tests have been adapted to support testing deep merging of ApiDOM structures.
+- File packages/apidom-core/README.md contains text fragments that were originally created
+  in https://github.com/TehShrike/deepmerge/blob/master/readme.md to document deepmerge library.
+  These text fragments have been amended to describe merging of ApiDOM structures.
+Copy of the MIT license can be found in `LICENSES/MIT.txt` file.
+All modifications are licensed under Apache 2.0 License.
+
+OpenAPI Specification 2.0
+Copyright The Linux Foundation
+Fragments of the specification text are embedded in packages/apidom-ls/src/config/openapi.
+Copy of the Apache 2.0 license can be found in `LICENSES/Apache-2.0.txt` file.
+
+OpenAPI Specification 3.0.x
+Copyright The Linux Foundation
+Fragments of the specification text are embedded in packages/apidom-ls/src/config/openapi.
+Copy of the Apache 2.0 license can be found in `LICENSES/Apache-2.0.txt` file.
+
+OpenAPI Specification 3.1.x
+Copyright The Linux Foundation
+Fragments of the specification text are embedded in packages/apidom-ls/src/config/openapi.
+Copy of the Apache 2.0 license can be found in `LICENSES/Apache-2.0.txt` file.
+
+AsyncAPI Specification 2.x / AsyncAPI Initiative
+Copyright The Linux Foundation
+Fragments of the specification text are embedded in packages/apidom-ls/src/config/asyncapi.
+Copy of the Apache 2.0 license can be found in `LICENSES/Apache-2.0.txt` file.
+
+JSON Schema Specification (Draft 4/5 -> 2020-12)
+Copyright (c) 2022 JSON Schema Specification Authors
+Fragments of the specification text are embedded in packages/apidom-ls/src/config/common.
+Copy of the BSD 3-Clause "New" or "Revised" License can be found in `LICENSES/BSD-3-Clause.txt` file.
+Copy of the Academic Free License v3.0 can be found in `LICENSES/AFL-3.0.txt` file.
+
+---
+
+If the SPDX-FileCopyrightText and SPDX-License-Identifier tags are not present in the file,
+it is assumed that these tags have following implicit value:
+
+SPDX-FileCopyrightText: Copyright 2020-2021 SmartBear Software Inc.
+SPDX-License-Identifier: Apache-2.0
+
+The following packages include this notice: @swaggerexpert/cookie@2.0.2
+
+@swaggerexpert/cookie
+Copyright 2024, Vladimír Gorej
+@swaggerexpert/cookie is licensed under Apache 2.0 license.
+Copy of the Apache 2.0 license can be found in `LICENSE` file.
+
+cookie
+Copyright (c) 2012-2014 Roman Shtylman <shtylman@gmail.com>
+Copyright (c) 2015 Douglas Christopher Wilson <doug@somethingdoug.com>
+Tests in this project are highly inspired by test-suite of cookie project which
+is licensed under MIT License. All modifications are licensed under Apache 2.0 License.
+No part of test-suite is being distributes within the npm release artifacts.
+Copy of the original MIT license can be found in https://github.com/jshttp/cookie/blob/master/LICENSE.
+
+The following packages include this notice: @swaggerexpert/json-pointer@2.10.2
+
+@swaggerexpert/json-pointer
+Copyright 2025, Vladimír Gorej
+@swaggerexpert/json-pointer is licensed under Apache 2.0 license.
+Copy of the Apache 2.0 license can be found in `LICENSE` file.
+
+JavaScript Object Notation (JSON) Pointer
+Copyright (c) 2013 IETF Trust and the persons identified as the document authors.  All rights reserved.
+https://datatracker.ietf.org/doc/html/rfc6901
+Majority of ABNF grammar (grammar.bnf) and certain texts within the README.md file
+are licensed under Simplified BSD License - https://spdx.org/licenses/BSD-2-Clause.html.
+
+The following packages include this notice: bare-path@3.1.2
+
+Copyright 2023 Holepunch Inc
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+---
+
+Copyright Joyent, Inc. and other Node contributors.
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to permit
+persons to whom the Software is furnished to do so, subject to the
+following conditions:
+
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
+
+The following packages include this notice: js2xmlparser@4.0.2
+
+js2xmlparser
+Copyright (C) 2016-2021 Michael Kourlas
+
+The following components are provided under the Apache License, version 2.0
+(https://www.apache.org/licenses/LICENSE-2.0):
+
+xmlcreate
+Copyright (C) 2016-2021 Michael Kourlas
+
+The text of the Apache License 2.0 can be found in the LICENSE file.
+
+The following packages include this notice: openapi-path-templating@2.2.1
+
+openapi-path-templating
+Copyright 2023, Vladimír Gorej
+openapi-path-templating is licensed under Apache 2.0 license.
+Copy of the Apache 2.0 license can be found in `LICENSE` file.
+
+OpenAPI Specification 3.1.x
+Copyright The Linux Foundation
+Fragments of the specification text are embedded in `README.md`.
+Definition of `template-expression-param-name` ABNF non-terminal is based on the OpenAPI Specification ABNF.
+Copy of the Apache 2.0 license can be found in `LICENSE` file.
+
+The following packages include this notice: openapi-server-url-templating@1.3.0
+
+openapi-server-url-templating
+Copyright 2024, Vladimír Gorej
+openapi-server-url-templating is licensed under Apache 2.0 license.
+Copy of the Apache 2.0 license can be found in `LICENSE` file.
+
+OpenAPI Specification 3.1.x
+Copyright The Linux Foundation
+Fragments of the specification text are embedded in `README.md`.
+Definition of `server-variable-name` ABNF non-terminal is based on the OpenAPI Specification ABNF.
+Copy of the Apache 2.0 license can be found in `LICENSE` file.
+
+The following packages include this notice: swagger-client@3.38.0
+
+swagger-js/swagger-client
+Copyright 2020-2021 SmartBear Software Inc.
+
+The following packages include this notice: swagger-ui-react@5.32.14
+
+swagger-ui
+Copyright 2020-2021 SmartBear Software Inc.
+
+The following packages include this notice: xmlcreate@2.0.4
+
+xmlcreate
+Copyright (C) 2016-2021 Michael Kourlas
+
