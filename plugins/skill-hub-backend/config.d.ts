@@ -24,11 +24,11 @@ export interface Config {
 
     /**
      * Where install receipts are posted. Receipts are fire and forget: an
-     * unreachable Mission Control queues the receipt and never blocks or
+     * unreachable Receipt service queues the receipt and never blocks or
      * fails a copy. Omit the whole block to disable receipts.
      */
     missionControl?: {
-      /** Base URL of the Mission Control API. */
+      /** Base URL of the Receipt service API. */
       baseUrl: string;
       /**
        * Agent token with only the receipts scope.

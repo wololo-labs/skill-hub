@@ -28,7 +28,10 @@ node_modules/
 
 # dotenv environment variables file
 .env
-.env.test
+.env.*
+*.env
+env.*
+dev-server*.log
 
 # Build output
 dist

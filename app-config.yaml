@@ -63,8 +63,8 @@ skillHub:
     initialDelay:
       seconds: 15
   missionControl:
-    baseUrl: ${MISSION_CONTROL_BASE_URL}
-    token: ${MISSION_CONTROL_TOKEN}
+    baseUrl: ${RECEIPT_SERVICE_BASE_URL}
+    token: ${RECEIPT_SERVICE_TOKEN}
 
 auth:
   # Guest only by default, so a clean clone boots with no credentials at all.

@@ -53,7 +53,7 @@ backend.add(import('@backstage/plugin-notifications-backend'));
 backend.add(import('@backstage/plugin-signals-backend'));
 
 // skill-hub: the agent asset entity provider, the asset body proxy and the
-// Mission Control receipt queue.
+// Receipt service receipt queue.
 backend.add(catalogModuleSkillHub);
 backend.add(skillHubPlugin);
 

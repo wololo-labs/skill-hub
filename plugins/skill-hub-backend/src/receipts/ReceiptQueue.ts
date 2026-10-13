@@ -27,7 +27,7 @@ const RETRY_MS = 30_000;
  *
  * `enqueue` returns synchronously. A receipt that cannot be delivered stays in
  * a bounded local queue and is retried in the background, so an unreachable or
- * slow Mission Control costs the developer nothing. Receipts are held in
+ * slow Receipt service costs the developer nothing. Receipts are held in
  * memory: a restart loses undelivered ones, which is the accepted trade for
  * never coupling the copy to a second service.
  */
@@ -51,7 +51,7 @@ export class ReceiptQueue {
   enqueue(receipt: InstallReceipt): void {
     if (!this.#config) {
       this.#logger.info(
-        `install receipt (not posted, Mission Control is not configured): ${receipt.actor} copied ${receipt.entityRef} for ${receipt.harness}`,
+        `install receipt (not posted, Receipt service is not configured): ${receipt.actor} copied ${receipt.entityRef} for ${receipt.harness}`,
       );
       return;
     }
@@ -124,14 +124,14 @@ export class ReceiptQueue {
       );
       if (!response.ok) {
         this.#logger.warn(
-          `Mission Control rejected a receipt with ${response.status}, will retry`,
+          `Receipt service rejected a receipt with ${response.status}, will retry`,
         );
         return false;
       }
       return true;
     } catch (error) {
       this.#logger.warn(
-        `could not post a receipt to Mission Control, will retry: ${
+        `could not post a receipt to Receipt service, will retry: ${
           (error as Error).message
         }`,
       );
