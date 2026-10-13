@@ -1,4 +1,4 @@
-+# Scoring assets
+# Scoring assets
 
 skill-hub displays score metadata supplied by a publisher. It does not run an
 evaluation or certify an asset.
