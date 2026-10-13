@@ -1,6 +1,6 @@
 /**
  * skill-hub backend: manifest discovery, the asset body proxy and the
- * Mission Control receipt queue.
+ * Receipt service receipt queue.
  */
 export { skillHubPlugin as default, skillHubPlugin } from './plugin';
 export { catalogModuleSkillHub } from './catalogModule';

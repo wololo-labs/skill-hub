@@ -12,8 +12,8 @@ for name in \
   GITHUB_TOKEN \
   AUTH_GITHUB_CLIENT_ID \
   AUTH_GITHUB_CLIENT_SECRET \
-  MISSION_CONTROL_BASE_URL \
-  MISSION_CONTROL_TOKEN
+  RECEIPT_SERVICE_BASE_URL \
+  RECEIPT_SERVICE_TOKEN
 do
   eval "value=\$$name"
   if [ -z "$value" ]; then

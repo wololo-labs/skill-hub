@@ -50,7 +50,7 @@ export const skillHubPlugin = createBackendPlugin({
         );
         // Read through a tolerant helper: an empty value is absent, not a
         // string of length zero. Compose cannot omit an environment variable,
-        // so an unconfigured Mission Control arrives as '' rather than unset.
+        // so an unconfigured Receipt service arrives as '' rather than unset.
         const baseUrl = optionalText(missionControl, 'baseUrl');
         const token = optionalText(missionControl, 'token');
         const receipts = new ReceiptQueue({

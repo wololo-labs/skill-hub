@@ -61,7 +61,7 @@ describe('ReceiptQueue', () => {
 
   it('returns while the post is still in flight, so a copy never waits on it', async () => {
     // The property that matters: enqueue returns without awaiting the
-    // response. A Mission Control that hangs cannot hang a copy.
+    // response. A Receipt service that hangs cannot hang a copy.
     fetchMock.mockReturnValue(new Promise(() => {}));
     const q = queue();
 
@@ -75,7 +75,7 @@ describe('ReceiptQueue', () => {
     q.shutdown();
   });
 
-  it('never throws when Mission Control is unreachable', async () => {
+  it('never throws when Receipt service is unreachable', async () => {
     fetchMock.mockRejectedValue(new Error('ECONNREFUSED'));
     const q = queue();
     expect(() => q.enqueue(receipt(1))).not.toThrow();
@@ -110,7 +110,7 @@ describe('ReceiptQueue', () => {
     q.shutdown();
   });
 
-  it('logs the copy instead of posting when Mission Control is not configured', async () => {
+  it('logs the copy instead of posting when Receipt service is not configured', async () => {
     const q = new ReceiptQueue({ logger });
     q.enqueue(receipt(1));
     await flush();

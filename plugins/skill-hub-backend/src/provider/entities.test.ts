@@ -632,7 +632,7 @@ publish:
     });
 
     describe('an MCP server the pack depends on', () => {
-      // docs/INSTALL-PROOF.md: on a pack declaring [claude, copilot], APM
+      // A pack declaring [claude, copilot] maps to supported APM targets.
       // skips the pack's primitives for --target codex but still reports
       // "1 MCP server" and writes it to .codex/config.toml. So the Codex
       // command does deliver something for the server, and only for it.

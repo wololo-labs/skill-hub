@@ -566,7 +566,7 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
   // A pack's own targets restrict its primitives but not an MCP server it
   // depends on: `apm install --target codex` on a pack declaring
   // [claude, copilot] skips the pack and still writes the server to
-  // .codex/config.toml (docs/INSTALL-PROOF.md, APM 0.29.0 and 0.33.0). Only
+  // .codex/config.toml. Only
   // codex is evidenced, so only codex is added, and only where the repository
   // has not narrowed it away. A pack APM refuses to read offers nothing. It
   // covers servers declared under dependencies.mcp only, not a file the
