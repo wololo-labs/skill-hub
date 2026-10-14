@@ -104,6 +104,8 @@ export interface ScoreBadgeProps {
   size?: 'small' | 'medium';
   /** The commit the asset is pinned to, so a stale score can be shown as one. */
   pinnedCommit?: string;
+  /** Why there is no score, when the publisher declared an eval. */
+  unscoredReason?: string;
 }
 
 /**
@@ -117,13 +119,15 @@ export const ScoreBadge = ({
   score,
   size = 'small',
   pinnedCommit,
+  unscoredReason,
 }: ScoreBadgeProps) => {
   const classes = useStyles();
   const sized = `${classes.badge} ${size === 'medium' ? classes.medium : ''}`;
 
   if (!score) {
-    const why =
-      'Unscored: no eval gate report is attached to this asset, so it cannot be installed from here';
+    const why = unscoredReason
+      ? `Unscored: ${unscoredReason}, so it cannot be installed from here`
+      : 'Unscored: no eval gate report is attached to this asset, so it cannot be installed from here';
     return (
       <Tooltip title={why}>
         <span className={`${sized} ${classes.unscored}`}>
