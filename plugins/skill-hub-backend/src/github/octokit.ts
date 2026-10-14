@@ -25,7 +25,7 @@ export function createOctokit(options: {
   }
   return new Octokit({
     auth: github?.config.token,
-    userAgent: 'wololo-labs/skill-hub',
+    userAgent: 'wololo-labs/skillshub-backstage',
     // A 404 on the manifest is the common case, not an incident: most
     // repositories have not opted in and never will. Keeping it at debug is
     // what makes a scan of several hundred repositories readable.

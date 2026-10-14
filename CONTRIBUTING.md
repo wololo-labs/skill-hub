@@ -1,4 +1,4 @@
-# Contributing to skill-hub
+# Contributing to skillshub-backstage
 
 Thanks for contributing.
 
