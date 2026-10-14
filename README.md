@@ -57,7 +57,7 @@ Open http://localhost:3000. The owners that are scanned are listed under
 
 The plugins are private packages and are not on npm, so copy them in.
 
-- Copy `plugins/skill-hub`, `plugins/skill-hub-backend` and `plugins/skill-hub-common` into your repo's `plugins/` and run `yarn install`.
+- Copy `plugins/skill-hub`, `plugins/skill-hub-backend` and `plugins/skill-hub-common` into your repo's `plugins/` and make sure your root `package.json` `workspaces` includes `plugins/*`. Add `"@internal/plugin-skill-hub-backend": "workspace:^"` to `packages/backend/package.json` and `"@internal/plugin-skill-hub": "workspace:^"` to `packages/app/package.json`, then run `yarn install`.
 - Backend `packages/backend/src/index.ts`: `import skillHubPlugin, { catalogModuleSkillHub } from '@internal/plugin-skill-hub-backend'`, then `backend.add(catalogModuleSkillHub)` and `backend.add(skillHubPlugin)`. Also add `@backstage/plugin-catalog-backend-module-ai-model`, which provides the `AiResource` kind.
 - Frontend `packages/app/src/App.tsx`: `import skillHubPlugin from '@internal/plugin-skill-hub'` and add it to `createApp({ features: [...] })`.
 - Copy the `skillHub` block from this repo's `app-config.yaml` (owners, schedule), and make sure your GitHub integration has a token.
