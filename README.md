@@ -42,6 +42,27 @@ yarn start
 Open http://localhost:3000. The owners that are scanned are listed under
 `skillHub.owners` in `app-config.yaml`.
 
+## Run it locally
+
+**This repo as a Backstage app (tested)**
+
+- Install Node 22 or 24, then `corepack enable`.
+- `yarn install --immutable`
+- `export GITHUB_TOKEN=<read-only token>` (only needed for private repos or to avoid rate limits).
+- Set `skillHub.owners` in `app-config.yaml` to the GitHub orgs or users to scan.
+- `yarn start`, then open http://localhost:3000 (backend on 7007, guest sign-in, in-memory database).
+- No Node? `cp .env.example .env` and `docker compose up`.
+
+**Add the plugin to your own Backstage (not yet tested end to end)**
+
+The plugins are private packages and are not on npm, so copy them in.
+
+- Copy `plugins/skill-hub`, `plugins/skill-hub-backend` and `plugins/skill-hub-common` into your repo's `plugins/` and make sure your root `package.json` `workspaces` includes `plugins/*`. Add `"@internal/plugin-skill-hub-backend": "workspace:^"` to `packages/backend/package.json` and `"@internal/plugin-skill-hub": "workspace:^"` to `packages/app/package.json`, then run `yarn install`.
+- Backend `packages/backend/src/index.ts`: `import skillHubPlugin, { catalogModuleSkillHub } from '@internal/plugin-skill-hub-backend'`, then `backend.add(catalogModuleSkillHub)` and `backend.add(skillHubPlugin)`. Also add `@backstage/plugin-catalog-backend-module-ai-model`, which provides the `AiResource` kind.
+- Frontend `packages/app/src/App.tsx`: `import skillHubPlugin from '@internal/plugin-skill-hub'` and add it to `createApp({ features: [...] })`.
+- Copy the `skillHub` block from this repo's `app-config.yaml` (owners, schedule), and make sure your GitHub integration has a token.
+- Backstage 1.54.0 is what this repo builds against. Treat any other version as untested.
+
 ## How an asset gets listed
 
 Add a `.agent-assets.yaml` manifest at the repository root. `owner` is
