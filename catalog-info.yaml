@@ -6,7 +6,7 @@ metadata:
     Backstage as the first-party catalogue and hub for agent assets: skills,
     agents, hooks, prompts, eval suites and MCP servers.
   annotations:
-    github.com/project-slug: wololo-labs/skill-hub
+    github.com/project-slug: wololo-labs/skillshub-backstage
 spec:
   type: website
   owner: group:default/team-ai-platform

@@ -401,7 +401,7 @@ export const InstallPanel = ({ asset, stale = false }: InstallPanelProps) => {
               <Box mt={1.5}>
                 <Link
                   className={classes.scoreLink}
-                  to="https://github.com/wololo-labs/skill-hub/blob/main/docs/SCORING.md"
+                  to="https://github.com/wololo-labs/skillshub-backstage/blob/main/docs/SCORING.md"
                 >
                   How to score an asset
                 </Link>

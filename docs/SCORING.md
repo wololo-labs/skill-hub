@@ -1,6 +1,6 @@
 # Scoring assets
 
-skill-hub displays score metadata supplied by a publisher. It does not run an
+The hub displays score metadata supplied by a publisher. It does not run an
 evaluation or certify an asset.
 
 An asset with a passing gate report can expose supported install commands. An
