@@ -13,6 +13,7 @@ import {
   ANNOTATION_INSTALL_UNAVAILABLE,
   ANNOTATION_REPO,
   ANNOTATION_SOURCE_LOCATION,
+  ANNOTATION_UNSCORED_REASON,
   APM_ACCEPTED_NOT_OFFERED,
   APM_ALL_TARGETS,
   APM_EXPLICIT_ONLY_TARGETS,
@@ -21,6 +22,7 @@ import {
   HARNESSES,
   InstallCommands,
   InstallUnavailable,
+  REASON_DECLARED_NOT_MEASURED,
   passedGate,
 } from '@internal/plugin-skill-hub-common';
 import { RepoRef, TreeEntry } from '../github/GithubAssetReader';
@@ -58,6 +60,8 @@ interface PackageInfo {
   name: string;
   version?: string;
   score?: EvalScore;
+  /** Why there is no score, when the pack declared an eval to be run. */
+  unscoredReason?: string;
   /** The harnesses APM will actually deploy this package to. */
   harnesses: string[];
   /** APM would refuse to read this pack at all, so nothing in it installs. */
@@ -260,6 +264,35 @@ function readGateReport(reportJson: string): EvalScore | undefined {
     ...(Object.keys(metrics).length ? { metrics } : {}),
     ...(Object.keys(stats).length ? { stats } : {}),
     ...(commit ? { measuredCommit: commit } : {}),
+  };
+}
+
+/**
+ * Whether apm.yml declares an `eval:` block, and a warning when it is one the
+ * hub cannot read.
+ *
+ * Only the declaration counts. Nothing inside the block is ever read as a
+ * result: a number there would be the publisher's word, and the hub scores
+ * from the gate's report alone. A block that is not a mapping (a bare `eval:`,
+ * a list, a string, an empty one) is ignored with a warning, never fatal.
+ */
+function evalDeclaration(
+  apm: Record<string, unknown>,
+  where: string,
+): { declared: boolean; warning?: string } {
+  if (!('eval' in apm)) return { declared: false };
+  const block = apm.eval;
+  if (
+    typeof block === 'object' &&
+    block !== null &&
+    !Array.isArray(block) &&
+    Object.keys(block).length
+  ) {
+    return { declared: true };
+  }
+  return {
+    declared: false,
+    warning: `${where}: apm.yml eval: is not a non-empty mapping, so it is ignored`,
   };
 }
 
@@ -693,6 +726,11 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
         ? await read(inDir(dir, 'eval-score.json'))
         : undefined,
     );
+    const evalBlock = evalDeclaration(apm, dir || '(repository root)');
+    // The provider logs every warning, so a malformed block is reported there.
+    if (evalBlock.warning) warnings.push(evalBlock.warning);
+    const unscoredReason =
+      evalBlock.declared && !score ? REASON_DECLARED_NOT_MEASURED : undefined;
     const deps = apm.dependencies as { mcp?: unknown } | undefined;
     const mcp = Array.isArray(deps?.mcp)
       ? (deps.mcp.filter(
@@ -708,6 +746,7 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
       name: entityName(name),
       version: typeof apm.version === 'string' ? apm.version : undefined,
       score,
+      unscoredReason,
       harnesses: declared.harnesses,
       refused: declared.refused,
       unavailable: declared.unavailable,
@@ -741,6 +780,9 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
             ? { [ANNOTATION_APM_PACKAGE]: `${name}@${info.version}` }
             : {}),
           ...(score ? { [ANNOTATION_EVAL_SCORE]: JSON.stringify(score) } : {}),
+          ...(unscoredReason
+            ? { [ANNOTATION_UNSCORED_REASON]: unscoredReason }
+            : {}),
           ...installAnnotations(
             installCommands(
               repo,
@@ -784,6 +826,9 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
               ? { [ANNOTATION_EVAL_SCORE]: JSON.stringify(score) }
               : {}),
             [ANNOTATION_EVAL_SCORE_REF]: `system:${namespace}/${info.name}`,
+            ...(unscoredReason
+              ? { [ANNOTATION_UNSCORED_REASON]: unscoredReason }
+              : {}),
             ...installAnnotations(
               installCommands(
                 repo,
@@ -990,6 +1035,9 @@ function scoreAnnotations(
     // which is what makes a stale score visible next to the pinned commit.
     ...(pkg.score
       ? { [ANNOTATION_EVAL_SCORE]: JSON.stringify(pkg.score) }
+      : {}),
+    ...(pkg.unscoredReason
+      ? { [ANNOTATION_UNSCORED_REASON]: pkg.unscoredReason }
       : {}),
   };
 }

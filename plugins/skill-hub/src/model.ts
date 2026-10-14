@@ -10,6 +10,7 @@ import {
   ScoreState,
   scoreState,
   readEvalScore,
+  readUnscoredReason,
   readHarnesses,
   readInstallCommands,
   readInstallUnavailable,
@@ -31,6 +32,8 @@ export interface Asset {
   harnesses: string[];
   score?: EvalScore;
   scoreRef?: string;
+  /** Why the asset is unscored, when its publisher declared an eval. */
+  unscoredReason?: string;
   install: InstallCommands;
   /** Why there is no install command, when there is none. */
   installUnavailable?: InstallUnavailable;
@@ -61,6 +64,7 @@ export function toAsset(entity: Entity): Asset {
     harnesses: readHarnesses(entity),
     score: readEvalScore(entity),
     scoreRef: annotations[ANNOTATION_EVAL_SCORE_REF],
+    unscoredReason: readUnscoredReason(entity),
     install: readInstallCommands(entity),
     installUnavailable: readInstallUnavailable(entity),
     tags: entity.metadata.tags ?? [],

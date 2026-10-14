@@ -161,6 +161,24 @@ describe('the four score states', () => {
     expect(command()).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /copy/i })).toBeNull();
   });
+
+  it('unscored with a declared eval: states the reason and still blocks install', async () => {
+    wrap(
+      <>
+        <ScoreBadge
+          score={undefined}
+          pinnedCommit={PINNED}
+          unscoredReason="declared, not yet measured"
+        />
+        <InstallPanel asset={asset(undefined)} />
+      </>,
+    );
+    expect(await screen.findByText('unscored')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Unscored: declared, not yet measured/),
+    ).toBeInTheDocument();
+    expect(command()).not.toBeInTheDocument();
+  });
 });
 
 describe('staleness', () => {

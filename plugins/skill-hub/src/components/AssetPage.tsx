@@ -256,7 +256,12 @@ export const AssetPage = () => {
       >
         <div className={classes.badges}>
           <span className={classes.type}>{asset.type}</span>
-          <ScoreBadge score={score} size="medium" pinnedCommit={asset.commit} />
+          <ScoreBadge
+            score={score}
+            size="medium"
+            pinnedCommit={asset.commit}
+            unscoredReason={asset.unscoredReason}
+          />
         </div>
       </Header>
 

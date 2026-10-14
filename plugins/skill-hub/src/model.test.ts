@@ -3,6 +3,7 @@ import {
   ANNOTATION_EVAL_SCORE,
   ANNOTATION_HARNESSES,
   ANNOTATION_INSTALL,
+  ANNOTATION_UNSCORED_REASON,
 } from '@internal/plugin-skill-hub-common';
 import {
   EMPTY_FACETS,
@@ -229,5 +230,15 @@ describe('countByState', () => {
     expect(Object.values(counts).reduce((a, b) => a + b, 0)).toBe(
       everything.length,
     );
+  });
+});
+
+describe('the reason an asset is unscored', () => {
+  it('reaches the asset model from the annotation, and is absent otherwise', () => {
+    const declared = entity({ name: 'declared' });
+    declared.metadata.annotations![ANNOTATION_UNSCORED_REASON] =
+      'declared, not yet measured';
+    expect(toAsset(declared).unscoredReason).toBe('declared, not yet measured');
+    expect(toAsset(entity({ name: 'plain' })).unscoredReason).toBeUndefined();
   });
 });

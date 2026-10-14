@@ -10,6 +10,7 @@ import {
   scoreState,
   readInstallCommands,
   isInstallable,
+  readUnscoredReason,
 } from '@internal/plugin-skill-hub-common';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -1228,5 +1229,118 @@ describe('publishedPaths', () => {
       'packages/qe/catalog-info.yaml',
       'packages/qe/eval-score.json',
     ]);
+  });
+});
+
+describe('an eval: block in apm.yml', () => {
+  const PASSING = JSON.stringify({
+    verdict: 'pass',
+    stats: { significant_improvement: true, mean_delta: 0.2 },
+    signals: [{ evaluator_id: 'q', candidate_mean: 0.9, baseline_mean: 0.5 }],
+  });
+  const EVAL = 'eval:\n  asset: .apm/skills/s\n  thresholds: { pass: 0.7 }\n';
+
+  async function pack(apm: string, extra: Record<string, string> = {}) {
+    const result = await buildEntities({
+      repo: REPO,
+      commitSha: SHA,
+      manifest: parseManifest('owner: team\npublish:\n  packages: "p/apm.yml"\n'),
+      ...repository({
+        'p/apm.yml': `name: p\nversion: 0.1.0\ntargets: [claude]\n${apm}`,
+        ...Object.fromEntries(
+          Object.entries(extra).map(([k, v]) => [`p/${k}`, v]),
+        ),
+      }),
+    });
+    return { ...result, system: find(result.entities, 'System', 'p')! };
+  }
+
+  it('keeps the gate verdict when the block is declared and a report is present', async () => {
+    const { system, warnings } = await pack(EVAL, {
+      'eval-gate-report.json': PASSING,
+    });
+    expect(scoreState(readEvalScore(system))).toBe('gain');
+    expect(readUnscoredReason(system)).toBeUndefined();
+    expect(readInstallCommands(system).claude).toBeDefined();
+    expect(warnings).toEqual([]);
+  });
+
+  it('is unscored, with the reason, when declared and nothing has been measured', async () => {
+    const { system, entities } = await pack(EVAL);
+    expect(scoreState(readEvalScore(system))).toBe('unscored');
+    expect(readUnscoredReason(system)).toBe('declared, not yet measured');
+    expect(isInstallable(system)).toBe(false);
+    expect(readInstallCommands(system)).toEqual({});
+    // The reason reaches the UI model of every member, not only the pack.
+    for (const entity of entities) {
+      expect(readUnscoredReason(entity)).toBe('declared, not yet measured');
+    }
+  });
+
+  it('never takes a number from the block', async () => {
+    const { system } = await pack(
+      'eval:\n  verdict: pass\n  score: 0.99\n  metrics: { q: { candidate: 1, baseline: 0 } }\n',
+    );
+    expect(readEvalScore(system)).toBeUndefined();
+    expect(scoreState(readEvalScore(system))).toBe('unscored');
+    expect(isInstallable(system)).toBe(false);
+  });
+
+  it('leaves the fallback chain alone when there is no block', async () => {
+    const none = await pack('', { 'eval-score.json': '{"verdict":"PASS"}' });
+    expect(readEvalScore(none.system)?.origin).toBe('eval-score');
+    expect(readUnscoredReason(none.system)).toBeUndefined();
+
+    const bare = await pack('');
+    expect(readEvalScore(bare.system)).toBeUndefined();
+    expect(readUnscoredReason(bare.system)).toBeUndefined();
+  });
+
+  it('keeps a legacy score when declared, since the chain is unchanged', async () => {
+    const { system } = await pack(EVAL, {
+      'eval-score.json': '{"verdict":"PASS"}',
+    });
+    expect(readEvalScore(system)?.origin).toBe('eval-score');
+    expect(readUnscoredReason(system)).toBeUndefined();
+  });
+
+  it.each([
+    ['a string', 'eval: yes\n'],
+    ['a list', 'eval:\n  - a\n'],
+    ['empty', 'eval:\n'],
+    ['an empty mapping', 'eval: {}\n'],
+  ])('ignores a block that is %s, with a warning, and still publishes', async (_n, block) => {
+    const { system, warnings } = await pack(block, {
+      'eval-gate-report.json': PASSING,
+    });
+    expect(system).toBeDefined();
+    expect(scoreState(readEvalScore(system))).toBe('gain');
+    expect(warnings).toEqual([
+      'p: apm.yml eval: is not a non-empty mapping, so it is ignored',
+    ]);
+  });
+
+  it('shows a malformed block with no report as plainly unscored', async () => {
+    const { system } = await pack('eval: nonsense\n');
+    expect(readUnscoredReason(system)).toBeUndefined();
+    expect(scoreState(readEvalScore(system))).toBe('unscored');
+  });
+
+  it('reads no file beyond the ones it already read', async () => {
+    const reads: string[] = [];
+    const files: Record<string, string> = {
+      'p/apm.yml': `name: p\nversion: 0.1.0\n${EVAL}`,
+    };
+    await buildEntities({
+      repo: REPO,
+      commitSha: SHA,
+      manifest: parseManifest('owner: team\npublish:\n  packages: "p/apm.yml"\n'),
+      tree: Object.keys(files).map(path => ({ path, sha: path, type: 'blob' })),
+      read: async path => {
+        reads.push(path);
+        return files[path];
+      },
+    });
+    expect(reads).toEqual(['p/apm.yml']);
   });
 });

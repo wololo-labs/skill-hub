@@ -18,6 +18,13 @@ export const ANNOTATION_ASSET_PATH = 'wololo.dev/asset-path';
 /** The file whose contents the detail page renders as the asset body. */
 export const ANNOTATION_BODY_PATH = 'wololo.dev/body-path';
 export const ANNOTATION_APM_PACKAGE = 'wololo.dev/apm-package';
+/**
+ * Set when a pack's apm.yml declares an `eval:` block but nothing has been
+ * measured yet. Its value is the reason shown beside the unscored state.
+ */
+export const ANNOTATION_UNSCORED_REASON = 'wololo.dev/unscored-reason';
+/** The reason carried for a pack that declares an eval and has no result. */
+export const REASON_DECLARED_NOT_MEASURED = 'declared, not yet measured';
 
 /**
  * Harness slugs the install panel can name, in display order. These are APM's
@@ -386,6 +393,11 @@ function sanitizeScore(raw: Record<string, unknown>): EvalScore {
     ...(Object.keys(stats).length ? { stats } : {}),
     ...(commit ? { measuredCommit: commit } : {}),
   };
+}
+
+/** Why an unscored asset has no score, when its publisher said so. */
+export function readUnscoredReason(entity: Entity): string | undefined {
+  return annotation(entity, ANNOTATION_UNSCORED_REASON) || undefined;
 }
 
 export function readEvalScore(entity: Entity): EvalScore | undefined {

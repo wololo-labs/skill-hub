@@ -117,7 +117,11 @@ const Row = ({ asset, to }: AssetRowProps) => {
           {asset.title}
         </Typography>
         <span className={classes.badgeWide}>
-          <ScoreBadge score={asset.score} pinnedCommit={asset.commit} />
+          <ScoreBadge
+            score={asset.score}
+            pinnedCommit={asset.commit}
+            unscoredReason={asset.unscoredReason}
+          />
         </span>
       </div>
 
@@ -127,7 +131,11 @@ const Row = ({ asset, to }: AssetRowProps) => {
 
       <div className={classes.meta}>
         <span className={classes.badgeNarrow}>
-          <ScoreBadge score={asset.score} pinnedCommit={asset.commit} />
+          <ScoreBadge
+            score={asset.score}
+            pinnedCommit={asset.commit}
+            unscoredReason={asset.unscoredReason}
+          />
         </span>
         <span className={classes.type}>{asset.type}</span>
         <span>{asset.owner}</span>
