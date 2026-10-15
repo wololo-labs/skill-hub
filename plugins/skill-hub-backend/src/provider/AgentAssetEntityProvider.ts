@@ -153,7 +153,7 @@ export class AgentAssetEntityProvider implements EntityProvider {
 
           const parsed =
             manifest.path === APM_FILE
-              ? manifestFromApm(repo.owner)
+              ? manifestFromApm(repo.owner, repo.ownerKind)
               : parseManifest(manifest.raw);
           const tree = await reader.getTree(repo, manifest.commitSha);
           const byPath = new Map(tree.map(e => [e.path, e.sha]));

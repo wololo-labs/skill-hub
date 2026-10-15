@@ -24,6 +24,9 @@ interface FakeRepo {
   broken?: boolean;
 }
 
+/** The owners in these estates that are personal accounts, not organisations. */
+const USER_OWNERS = new Set(['stevengonsalvez']);
+
 /** The repository's tree: its files, plus the root apm.yml it declares. */
 function repoFiles(entry: FakeRepo): Record<string, string> {
   return { ...entry.files, ...(entry.apm ? { 'apm.yml': entry.apm } : {}) };
@@ -45,13 +48,20 @@ function fakeReader(estate: Record<string, Record<string, FakeRepo>>) {
         repo,
         defaultBranch: 'main',
         archived: false,
+        ownerKind: USER_OWNERS.has(owner)
+          ? ('User' as const)
+          : ('Organization' as const),
       }));
     },
     async getManifest(repo: RepoRef): Promise<ManifestFetch | undefined> {
       const entry = estate[repo.owner][repo.repo];
       if (entry.broken) throw new Error('Repository access blocked');
       if (entry.manifest) {
-        return { path: '.agent-assets.yaml', raw: entry.manifest, commitSha: SHA };
+        return {
+          path: '.agent-assets.yaml',
+          raw: entry.manifest,
+          commitSha: SHA,
+        };
       }
       if (entry.apm) return { path: 'apm.yml', raw: entry.apm, commitSha: SHA };
       return undefined;
@@ -165,13 +175,28 @@ describe('AgentAssetEntityProvider', () => {
     const pack = entities.find(e => e.kind === 'System')!;
     expect(pack.spec?.owner).toBe('group:default/wololo-labs');
     // The entity points back at the file that actually declared it.
-    expect(pack.metadata.annotations?.['backstage.io/managed-by-location']).toBe(
-      `url:https://github.com/wololo-labs/root-pack/blob/${SHA}/apm.yml`,
-    );
     expect(
-      entities.find(e => e.metadata.name === 'tdd')?.spec?.system,
-    ).toBe('root-pack');
+      pack.metadata.annotations?.['backstage.io/managed-by-location'],
+    ).toBe(`url:https://github.com/wololo-labs/root-pack/blob/${SHA}/apm.yml`);
+    expect(entities.find(e => e.metadata.name === 'tdd')?.spec?.system).toBe(
+      'root-pack',
+    );
     expect(status.latest().repositories[0].state).toBe('published');
+  });
+
+  it("owns a personal account's repository with a User, because no Group is named after a person", async () => {
+    const { mutations } = await run({
+      stevengonsalvez: {
+        'my-pack': {
+          apm: 'name: my-pack\nversion: 0.1.0\ntargets: [claude]\n',
+        },
+      },
+    });
+
+    const pack = mutations[0]
+      .map(e => e.entity)
+      .find(e => e.kind === 'System')!;
+    expect(pack.spec?.owner).toBe('user:default/stevengonsalvez');
   });
 
   it('reports an apm.yml with no name or version as a refused pack instead of dropping the repository', async () => {

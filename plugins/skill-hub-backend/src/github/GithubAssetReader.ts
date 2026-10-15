@@ -7,6 +7,12 @@ export interface RepoRef {
   repo: string;
   defaultBranch: string;
   archived: boolean;
+  /**
+   * What kind of GitHub account `owner` is, which is also the kind of Backstage
+   * entity that can own what the repository publishes. Unset is read as an
+   * organisation.
+   */
+  ownerKind?: 'User' | 'Organization';
 }
 
 export interface TreeEntry {
@@ -84,6 +90,7 @@ export class GithubAssetReader {
               repo: r.name,
               defaultBranch: r.default_branch ?? 'main',
               archived: Boolean(r.archived),
+              ownerKind: kind === 'orgs' ? 'Organization' : 'User',
             });
           }
         }

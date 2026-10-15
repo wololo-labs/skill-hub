@@ -168,13 +168,19 @@ export function parseManifest(raw: string): AgentAssetsManifest {
  * What a repository publishes when all it has is a root `apm.yml`: the package
  * itself and the primitives APM keeps under `.apm/`. The owner is the GitHub
  * account the repository lives under, because `apm.yml` has no field that is
- * an entity reference. Nothing is parsed here: a malformed `apm.yml` is
- * reported by the pack reader as a refused pack, with its members.
+ * an entity reference: a Group for an organisation and a User for a personal
+ * account, since a Group named after a person does not exist. Nothing is
+ * parsed here: a malformed `apm.yml` is reported by the pack reader as a
+ * refused pack, with its members.
  */
-export function manifestFromApm(githubOwner: string): AgentAssetsManifest {
+export function manifestFromApm(
+  githubOwner: string,
+  ownerKind: 'User' | 'Organization' = 'Organization',
+): AgentAssetsManifest {
+  const kind = ownerKind === 'User' ? 'user' : 'group';
   return {
     source: APM_FILE,
-    owner: githubOwner,
+    owner: `${kind}:default/${githubOwner.toLowerCase()}`,
     harnesses: STANDALONE_HARNESSES,
     harnessesExplicit: false,
     publish: {
