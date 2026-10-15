@@ -193,9 +193,12 @@ a public issue containing credentials, private URLs, or customer data. See
 ### Discovery tuning
 
 Discovery is file-only: no topic, no code search, no per-repository
-Backstage configuration. Each repository costs up to two lookups per scan, for
-`.agent-assets.yaml` and then `apm.yml`, and an unchanged file costs no rate
-limit. Under `skillHub` in `app-config.yaml`:
+Backstage configuration. Each scan looks for `.agent-assets.yaml` and then
+`apm.yml` in every repository. A file that exists and is unchanged answers 304
+and costs no rate limit, but a file that is missing is a 404, which cannot be
+conditional and is charged. So a repository with only `apm.yml` costs one
+request per scan, and one with neither costs two. Under `skillHub` in
+`app-config.yaml`:
 
 - `owners`: GitHub organisations or users scanned for a root `apm.yml` (or the
   legacy `.agent-assets.yaml`).
