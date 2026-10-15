@@ -97,7 +97,8 @@ From a root `apm.yml` the hub publishes:
 - the primitives APM keeps under `.apm/`: `skills/*/SKILL.md`,
   `agents/*.agent.md`, `instructions/*.instructions.md` and
   `prompts/*.prompt.md`, each offered as part of that package
-- the owner as `group:default/<the GitHub account the repository is under>`
+- the owner as `user:default/<account>` when the repository is under a user
+  account, or `group:default/<account>` when it is under an organisation
 
 Remove `apm.yml` and the assets leave on the next sync.
 
