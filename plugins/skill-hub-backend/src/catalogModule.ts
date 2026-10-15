@@ -63,7 +63,7 @@ export const catalogModuleSkillHub = createBackendModule({
           }),
         );
         logger.info(
-          `agent asset discovery is watching ${owners.join(', ')} for .agent-assets.yaml`,
+          `agent asset discovery is watching ${owners.join(', ')} for apm.yml (or the legacy .agent-assets.yaml)`,
         );
       },
     });

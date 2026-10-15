@@ -1,5 +1,6 @@
 import { Octokit } from '@octokit/rest';
 import { LoggerService } from '@backstage/backend-plugin-api';
+import { APM_FILE, LEGACY_MANIFEST_FILE } from '../provider/manifest';
 
 export interface RepoRef {
   owner: string;
@@ -15,8 +16,12 @@ export interface TreeEntry {
   type: 'blob' | 'tree' | 'commit';
 }
 
-/** The manifest as fetched, with the commit every asset will be pinned to. */
+/**
+ * The file a repository declared itself in, as fetched, with the commit every
+ * asset will be pinned to. `path` says which of the two files it was.
+ */
 export interface ManifestFetch {
+  path: typeof LEGACY_MANIFEST_FILE | typeof APM_FILE;
   raw: string;
   commitSha: string;
 }
@@ -40,7 +45,7 @@ export class GithubAssetReader {
   readonly #octokit: Octokit;
   readonly #logger: LoggerService;
   readonly #repoListCache = new Map<string, CacheEntry<RepoRef[]>>();
-  readonly #manifestCache = new Map<string, CacheEntry<string | undefined>>();
+  readonly #manifestCache = new Map<string, CacheEntry<string>>();
   readonly #blobCache = new Map<string, string>();
 
   constructor(options: { octokit: Octokit; logger: LoggerService }) {
@@ -95,43 +100,52 @@ export class GithubAssetReader {
   }
 
   /**
-   * Reads `.agent-assets.yaml` from a repository root. A 404 is the common
-   * case, the signal that a repository has not opted in, and is returned as
-   * undefined rather than raised.
+   * Reads how a repository declares itself: the legacy `.agent-assets.yaml`
+   * if it has one, otherwise the `apm.yml` at its root. A 404 on both is the
+   * common case, the signal that a repository has not opted in, and is
+   * returned as undefined rather than raised.
+   *
+   * The legacy file is tried first because it can name more than the root
+   * package, so a repository that has both keeps publishing what it does today.
    */
   async getManifest(repo: RepoRef): Promise<ManifestFetch | undefined> {
-    const key = `${repo.owner}/${repo.repo}`;
+    for (const path of [LEGACY_MANIFEST_FILE, APM_FILE] as const) {
+      const raw = await this.#readRootFile(repo, path);
+      if (raw !== undefined) {
+        return { path, raw, commitSha: await this.#headCommit(repo) };
+      }
+    }
+    return undefined;
+  }
+
+  async #readRootFile(repo: RepoRef, path: string): Promise<string | undefined> {
+    const key = `${repo.owner}/${repo.repo}/${path}`;
     const cached = this.#manifestCache.get(key);
 
-    let raw: string | undefined;
     try {
       const res = await this.#octokit.rest.repos.getContent({
         owner: repo.owner,
         repo: repo.repo,
-        path: '.agent-assets.yaml',
+        path,
         headers: {
           accept: 'application/vnd.github.raw+json',
           ...(cached ? { 'if-none-match': cached.etag } : {}),
         },
       });
       // With the raw accept header the body is the file itself.
-      raw = res.data as unknown as string;
+      const raw = res.data as unknown as string;
       const etag = res.headers.etag;
       if (etag) this.#manifestCache.set(key, { etag, value: raw });
+      return raw;
     } catch (error) {
       const status = (error as { status?: number }).status;
-      if (status === 304 && cached) {
-        raw = cached.value;
-      } else if (status === 404) {
+      if (status === 304 && cached) return cached.value;
+      if (status === 404) {
         this.#manifestCache.delete(key);
         return undefined;
-      } else {
-        throw error;
       }
+      throw error;
     }
-
-    if (raw === undefined) return undefined;
-    return { raw, commitSha: await this.#headCommit(repo) };
   }
 
   /** Every path in the repository at a commit, in one request. */
