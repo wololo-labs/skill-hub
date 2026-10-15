@@ -1,4 +1,5 @@
 import { mockServices } from '@backstage/backend-test-utils';
+import { readInstallUnavailable } from '@internal/plugin-skill-hub-common';
 import {
   DeferredEntity,
   EntityProviderConnection,
@@ -159,6 +160,8 @@ describe('AgentAssetEntityProvider', () => {
           files: {
             '.apm/skills/tdd/SKILL.md': '---\ndescription: tdd\n---\n',
             '.apm/agents/reviewer.agent.md': '---\ndescription: reviews\n---\n',
+            '.apm/instructions/style.instructions.md': '---\ndescription: style\n---\n',
+            '.apm/prompts/ship.prompt.md': '---\ndescription: ship\n---\n',
             'README.md': '# root pack',
           },
         },
@@ -169,7 +172,17 @@ describe('AgentAssetEntityProvider', () => {
     expect(entities.map(e => e.metadata.name).sort()).toEqual([
       'reviewer',
       'root-pack',
+      'ship',
+      'style',
       'tdd',
+    ]);
+    const typeOf = (name: string) =>
+      entities.find(e => e.metadata.name === name)?.spec?.type;
+    expect([typeOf('tdd'), typeOf('reviewer'), typeOf('style'), typeOf('ship')]).toEqual([
+      'skill',
+      'agent',
+      'rule',
+      'prompt',
     ]);
 
     const pack = entities.find(e => e.kind === 'System')!;
@@ -201,11 +214,27 @@ describe('AgentAssetEntityProvider', () => {
 
   it('reports an apm.yml with no name or version as a refused pack instead of dropping the repository', async () => {
     const { status, mutations } = await run({
-      'wololo-labs': { bare: { apm: 'targets: [claude]\n' } },
+      'wololo-labs': {
+        bare: {
+          apm: 'targets: [claude]\n',
+          // A passing score, so the pack's refusal is what withholds the command.
+          files: {
+            'eval-score.json': JSON.stringify({
+              verdict: 'PASS',
+              recorded: '2026-09-04',
+              metrics: { mutation_kill_rate: { candidate: 0.3, baseline: 0.23 } },
+            }),
+          },
+        },
+      },
     });
 
     expect(mutations[0].map(e => e.entity.metadata.name)).toEqual(['bare']);
+    expect(readInstallUnavailable(mutations[0][0].entity)).toBe('refused');
     expect(status.latest().repositories[0].state).toBe('published');
+    expect(status.latest().repositories[0].warnings).toEqual([
+      expect.stringContaining('has no name'),
+    ]);
   });
 
   it('lets a legacy .agent-assets.yaml take precedence over a root apm.yml', async () => {
