@@ -117,3 +117,100 @@ describe('GithubAssetReader.getManifest caching', () => {
     await expect(reader.getManifest(REPO)).rejects.toThrow('Server Error');
   });
 });
+
+describe('GithubAssetReader.listRepositories', () => {
+  const repoRow = { name: 'estate', default_branch: 'main', archived: false };
+  const status = (code: number) => () => {
+    throw Object.assign(new Error(`HTTP ${code}`), { status: code });
+  };
+
+  /**
+   * An Octokit whose org and user endpoints are scripted call by call. The
+   * paginator is reduced to a single page, which is all these cases need.
+   */
+  function listing(
+    org: Array<(args: any) => unknown>,
+    user: Array<(args: any) => unknown> = [],
+  ) {
+    const orgCalls: any[] = [];
+    const userCalls: any[] = [];
+    const endpoint =
+      (script: Array<(args: any) => unknown>, seen: any[]) => (args: any) => {
+        seen.push(args);
+        return script.shift()!(args);
+      };
+    const listForOrg = endpoint(org, orgCalls);
+    const listForUser = endpoint(user, userCalls);
+    const octokit = {
+      paginate: {
+        iterator: (fn: (args: any) => unknown, args: any) =>
+          (async function* () {
+            yield await fn(args);
+          })(),
+      },
+      rest: { repos: { listForOrg, listForUser } },
+    };
+    const reader = new GithubAssetReader({
+      octokit: octokit as any,
+      logger: mockServices.logger.mock(),
+    });
+    return { reader, orgCalls, userCalls };
+  }
+
+  const page = (etag?: string) => () => ({
+    data: [repoRow],
+    headers: etag ? { etag } : {},
+  });
+
+  it('marks the repositories of an organisation as Organization owned', async () => {
+    const { reader, userCalls } = listing([page()]);
+    const repos = await reader.listRepositories('wololo-labs');
+    expect(repos).toEqual([
+      expect.objectContaining({ repo: 'estate', ownerKind: 'Organization' }),
+    ]);
+    expect(userCalls).toHaveLength(0);
+  });
+
+  it('falls back to the user endpoint on a 404 and marks the repositories User owned', async () => {
+    const { reader, orgCalls, userCalls } = listing([status(404)], [page()]);
+    const repos = await reader.listRepositories('stevengonsalvez');
+    expect(repos).toEqual([
+      expect.objectContaining({ repo: 'estate', ownerKind: 'User' }),
+    ]);
+    expect(orgCalls[0].org).toBe('stevengonsalvez');
+    expect(userCalls[0].username).toBe('stevengonsalvez');
+  });
+
+  it('does not fall back to the user endpoint on a failure other than a 404', async () => {
+    const { reader, userCalls } = listing([status(500)]);
+    await expect(reader.listRepositories('wololo-labs')).rejects.toThrow(
+      'HTTP 500',
+    );
+    expect(userCalls).toHaveLength(0);
+  });
+
+  it('replays the cached list when the etag it sent answers 304', async () => {
+    const { reader, orgCalls } = listing([page('W/"1"'), status(304)]);
+    const first = await reader.listRepositories('wololo-labs');
+    const again = await reader.listRepositories('wololo-labs');
+
+    expect(again).toEqual(first);
+    expect(again[0].ownerKind).toBe('Organization');
+    expect(orgCalls[0].headers).toBeUndefined();
+    expect(orgCalls[1].headers).toEqual({ 'if-none-match': 'W/"1"' });
+  });
+
+  it('replays a cached user list on a 304 after the org endpoint 404s again', async () => {
+    const { reader, orgCalls, userCalls } = listing(
+      [status(404), status(404)],
+      [page('W/"2"'), status(304)],
+    );
+    const first = await reader.listRepositories('stevengonsalvez');
+    const again = await reader.listRepositories('stevengonsalvez');
+
+    expect(again).toEqual(first);
+    expect(again[0].ownerKind).toBe('User');
+    expect(userCalls[1].headers).toEqual({ 'if-none-match': 'W/"2"' });
+    expect(orgCalls).toHaveLength(2);
+  });
+});
