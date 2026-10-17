@@ -20,6 +20,10 @@ jobs:
           fetch-depth: 0
       - name: Scan secrets
         if: env.GITGUARDIAN_API_KEY != ''
+        # Non-blocking while the free GitGuardian API quota is exhausted; the
+        # gitleaks workflow is the blocking secret gate. Remove this line once
+        # the quota is restored.
+        continue-on-error: true
         uses: GitGuardian/ggshield/actions/secret@v1.55.0
         env:
           GITHUB_PUSH_BEFORE_SHA: ${{ github.event.before }}
