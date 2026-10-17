@@ -1,6 +1,12 @@
 import { parse as parseYaml } from 'yaml';
 import { HARNESSES } from '@internal/plugin-skill-hub-common';
 
+/** The file a repository declares itself in: an APM package at its root. */
+export const APM_FILE = 'apm.yml';
+
+/** The legacy manifest. When a repository has one it takes precedence. */
+export const LEGACY_MANIFEST_FILE = '.agent-assets.yaml';
+
 /**
  * The asset kinds a repository can publish. These are the keys under
  * `publish:` in `.agent-assets.yaml`, and they map onto the entity model:
@@ -34,6 +40,8 @@ export const SPEC_TYPE_BY_KIND: Record<
 };
 
 export interface AgentAssetsManifest {
+  /** The file this came from, which entities point back to as their origin. */
+  source: typeof APM_FILE | typeof LEGACY_MANIFEST_FILE;
   /** Entity reference for the owner of everything the repository publishes. */
   owner: string;
   /** Optional system every asset belongs to, unless a pack claims it first. */
@@ -147,10 +155,40 @@ export function parseManifest(raw: string): AgentAssetsManifest {
   }
 
   return {
+    source: LEGACY_MANIFEST_FILE,
     owner: root.owner,
     system: root.system,
     harnesses,
     harnessesExplicit: Boolean(root.harnesses),
     publish,
+  };
+}
+
+/**
+ * What a repository publishes when all it has is a root `apm.yml`: the package
+ * itself and the primitives APM keeps under `.apm/`. The owner is the GitHub
+ * account the repository lives under, because `apm.yml` has no field that is
+ * an entity reference: a Group for an organisation and a User for a personal
+ * account, since a Group named after a person does not exist. Nothing is
+ * parsed here: a malformed `apm.yml` is reported by the pack reader as a
+ * refused pack, with its members.
+ */
+export function manifestFromApm(
+  githubOwner: string,
+  ownerKind: 'User' | 'Organization' = 'Organization',
+): AgentAssetsManifest {
+  const kind = ownerKind === 'User' ? 'user' : 'group';
+  return {
+    source: APM_FILE,
+    owner: `${kind}:default/${githubOwner.toLowerCase()}`,
+    harnesses: STANDALONE_HARNESSES,
+    harnessesExplicit: false,
+    publish: {
+      packages: [APM_FILE],
+      skills: ['.apm/skills/*/SKILL.md'],
+      agents: ['.apm/agents/*.agent.md'],
+      rules: ['.apm/instructions/*.instructions.md'],
+      prompts: ['.apm/prompts/*.prompt.md'],
+    },
   };
 }

@@ -5,7 +5,8 @@
 A Backstage-based catalogue for every agent asset (skills, agents, hooks,
 packs, MCP servers) in a GitHub estate.
 
-- Finds assets by scanning the GitHub owners you configure for a manifest file.
+- Finds assets by scanning the GitHub owners you configure for repositories with
+  an `apm.yml` at their root.
 - Shows where each asset came from: repository, path and commit.
 - Shows the score its publisher recorded for it.
 - Runs no evaluation itself. It displays the score a publisher recorded, and
@@ -65,9 +66,49 @@ The plugins are private packages and are not on npm, so copy them in.
 
 ## How an asset gets listed
 
-Add a `.agent-assets.yaml` manifest at the repository root. `owner` is
-required, and at least one `publish` glob list is required. Globs are relative
-to the repository root.
+A repository lists itself by having an `apm.yml` at its root. That is the
+[APM](https://github.com/microsoft/apm) package file, the same one
+[wololo-evals](https://github.com/wololo-labs/wololo-evals) reads for its
+`eval:` block, so the package and its evaluation are declared in one place.
+No other file and no Backstage configuration is needed. `name` and `version`
+are required by APM.
+
+```yaml
+name: my-pack
+version: 0.1.0
+targets: [claude, copilot]
+eval:
+  asset: skill
+  benchmark: benchmark
+  engine: claude
+  model: claude-sonnet-5
+  max_cost_usd: 1.00
+  thresholds: { pass: 0.7, max_regression: 0.0 }
+```
+
+The `eval:` keys are documented in the
+[wololo-evals README](https://github.com/wololo-labs/wololo-evals#the-eval-block),
+which also shows how to run `wololo-evals-cli run --config apm.yml` and commit
+the `eval-gate-report.json` it writes beside `apm.yml`.
+
+From a root `apm.yml` the hub publishes:
+
+- the package itself, with its score and install command
+- the primitives APM keeps under `.apm/`: `skills/*/SKILL.md`,
+  `agents/*.agent.md`, `instructions/*.instructions.md` and
+  `prompts/*.prompt.md`, each offered as part of that package
+- the owner as `user:default/<account>` when the repository is under a user
+  account, or `group:default/<account>` when it is under an organisation
+
+Remove `apm.yml` and the assets leave on the next sync.
+
+### Legacy: `.agent-assets.yaml`
+
+A repository that is not a single root package, such as a monorepo with
+`packages/*/apm.yml`, can still use the older `.agent-assets.yaml` manifest at
+its root. When both files exist, the manifest wins and the root `apm.yml` is not
+added to it. `owner` and at least one `publish` glob list are required, and
+globs are relative to the repository root.
 
 ```yaml
 owner: team-ai-platform
@@ -78,8 +119,6 @@ publish:
     - packages/*/apm.yml
 ```
 
-A full example is
-[`.agent-assets.yaml` in ainb-toolkit](https://github.com/stevengonsalvez/ainb-toolkit/blob/main/.agent-assets.yaml).
 Publish keys: `skills`, `rules`, `agents`, `hooks`, `prompts`, `evals`,
 `packages`, `mcp`. Remove the file and the assets leave on the next sync.
 
@@ -92,7 +131,7 @@ order, at:
 2. a score annotation in `catalog-info.yaml`
 3. `eval-score.json` beside the package's `apm.yml`
 
-A package's `apm.yml` can also carry an `eval:` block that declares how it is
+A package's `apm.yml` carries an `eval:` block that declares how it is
 evaluated. The hub only checks that the block exists. States shown: **gain**,
 **no measured gain**, **regressed**, **failed**, **unscored**, and **declared
 but not yet measured** (an `eval:` block with no report). Scores are produced
@@ -154,10 +193,18 @@ a public issue containing credentials, private URLs, or customer data. See
 
 ### Discovery tuning
 
-Discovery is manifest-only: no topic, no code search, no per-repository
-Backstage configuration. Under `skillHub` in `app-config.yaml`:
+Discovery is file-only: no topic, no code search, no per-repository
+Backstage configuration. Each scan looks for `.agent-assets.yaml` and then
+`apm.yml` in every repository. A file that exists and is unchanged answers 304
+and costs no rate limit, but a file that is missing is a 404, which cannot be
+conditional and is charged. So an unchanged legacy manifest costs no requests
+and never reaches `apm.yml`. A repository with only `apm.yml` costs one request
+per scan when it is unchanged and two when it is new or modified, and one with
+neither costs two. Under `skillHub` in
+`app-config.yaml`:
 
-- `owners`: GitHub organisations or users scanned for `.agent-assets.yaml`.
+- `owners`: GitHub organisations or users scanned for a root `apm.yml` (or the
+  legacy `.agent-assets.yaml`).
 - `schedule`: `frequency` (default every 10 minutes), `timeout`,
   `initialDelay`.
 - `missionControl`: optional receipt service (`baseUrl`, `token`). Receipts are

@@ -48,9 +48,10 @@ integrations:
       # skillHub.owners. Supplied through the environment, never committed.
       token: ${GITHUB_TOKEN}
 
-# The agent asset hub. Discovery is manifest-only: a repository joins the
-# catalogue by adding .agent-assets.yaml to its root, and leaves by removing
-# it. No topic, no code search, no per-repo Backstage configuration.
+# The agent asset hub. Discovery is file-only: a repository joins the
+# catalogue by having an apm.yml at its root (or the legacy .agent-assets.yaml),
+# and leaves by removing it. No topic, no code search, no per-repo Backstage
+# configuration.
 skillHub:
   owners:
     - stevengonsalvez

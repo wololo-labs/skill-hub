@@ -6,10 +6,10 @@ export interface Config {
    */
   skillHub?: {
     /**
-     * GitHub organisations or user accounts scanned for the
-     * `.agent-assets.yaml` manifest. A repository joins the catalogue by
-     * adding that file and leaves by removing it; nothing else opts a
-     * repository in.
+     * GitHub organisations or user accounts scanned for a root `apm.yml`, or
+     * the legacy `.agent-assets.yaml` manifest. A repository joins the
+     * catalogue by having either file and leaves by removing it; nothing else
+     * opts a repository in.
      */
     owners: string[];
 

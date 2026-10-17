@@ -1,4 +1,5 @@
 import { mockServices } from '@backstage/backend-test-utils';
+import { readInstallUnavailable } from '@internal/plugin-skill-hub-common';
 import {
   DeferredEntity,
   EntityProviderConnection,
@@ -15,10 +16,21 @@ import { SkillHubStatus, SkillHubStatusService } from '../status';
 const SHA = 'c'.repeat(40);
 
 interface FakeRepo {
+  /** The legacy `.agent-assets.yaml`. */
   manifest?: string;
+  /** The `apm.yml` at the repository root. */
+  apm?: string;
   files?: Record<string, string>;
   /** Set to make every read of this repository fail. */
   broken?: boolean;
+}
+
+/** The owners in these estates that are personal accounts, not organisations. */
+const USER_OWNERS = new Set(['stevengonsalvez']);
+
+/** The repository's tree: its files, plus the root apm.yml it declares. */
+function repoFiles(entry: FakeRepo): Record<string, string> {
+  return { ...entry.files, ...(entry.apm ? { 'apm.yml': entry.apm } : {}) };
 }
 
 /**
@@ -37,16 +49,26 @@ function fakeReader(estate: Record<string, Record<string, FakeRepo>>) {
         repo,
         defaultBranch: 'main',
         archived: false,
+        ownerKind: USER_OWNERS.has(owner)
+          ? ('User' as const)
+          : ('Organization' as const),
       }));
     },
     async getManifest(repo: RepoRef): Promise<ManifestFetch | undefined> {
       const entry = estate[repo.owner][repo.repo];
       if (entry.broken) throw new Error('Repository access blocked');
-      if (!entry.manifest) return undefined;
-      return { raw: entry.manifest, commitSha: SHA };
+      if (entry.manifest) {
+        return {
+          path: '.agent-assets.yaml',
+          raw: entry.manifest,
+          commitSha: SHA,
+        };
+      }
+      if (entry.apm) return { path: 'apm.yml', raw: entry.apm, commitSha: SHA };
+      return undefined;
     },
     async getTree(repo: RepoRef): Promise<TreeEntry[]> {
-      const files = estate[repo.owner][repo.repo].files ?? {};
+      const files = repoFiles(estate[repo.owner][repo.repo]);
       return Object.keys(files).map(path => ({
         path,
         sha: `blob-${repo.repo}-${path}`,
@@ -54,7 +76,7 @@ function fakeReader(estate: Record<string, Record<string, FakeRepo>>) {
       }));
     },
     async readBlob(repo: RepoRef, blobSha: string): Promise<string> {
-      const files = estate[repo.owner][repo.repo].files ?? {};
+      const files = repoFiles(estate[repo.owner][repo.repo]);
       const path = blobSha.replace(`blob-${repo.repo}-`, '');
       return files[path];
     },
@@ -128,6 +150,106 @@ describe('AgentAssetEntityProvider', () => {
     expect(status.latest().repositories.map(r => r.repository)).toEqual([
       'wololo-labs/opted-in',
     ]);
+  });
+
+  it('publishes a repository from its apm.yml alone, with no .agent-assets.yaml', async () => {
+    const { status, mutations } = await run({
+      'wololo-labs': {
+        'root-pack': {
+          apm: 'name: root-pack\nversion: 0.1.0\ntargets: [claude]\neval:\n  suite: evals\n',
+          files: {
+            '.apm/skills/tdd/SKILL.md': '---\ndescription: tdd\n---\n',
+            '.apm/agents/reviewer.agent.md': '---\ndescription: reviews\n---\n',
+            '.apm/instructions/style.instructions.md': '---\ndescription: style\n---\n',
+            '.apm/prompts/ship.prompt.md': '---\ndescription: ship\n---\n',
+            'README.md': '# root pack',
+          },
+        },
+      },
+    });
+
+    const entities = mutations[0].map(e => e.entity);
+    expect(entities.map(e => e.metadata.name).sort()).toEqual([
+      'reviewer',
+      'root-pack',
+      'ship',
+      'style',
+      'tdd',
+    ]);
+    const typeOf = (name: string) =>
+      entities.find(e => e.metadata.name === name)?.spec?.type;
+    expect([typeOf('tdd'), typeOf('reviewer'), typeOf('style'), typeOf('ship')]).toEqual([
+      'skill',
+      'agent',
+      'rule',
+      'prompt',
+    ]);
+
+    const pack = entities.find(e => e.kind === 'System')!;
+    expect(pack.spec?.owner).toBe('group:default/wololo-labs');
+    // The entity points back at the file that actually declared it.
+    expect(
+      pack.metadata.annotations?.['backstage.io/managed-by-location'],
+    ).toBe(`url:https://github.com/wololo-labs/root-pack/blob/${SHA}/apm.yml`);
+    expect(entities.find(e => e.metadata.name === 'tdd')?.spec?.system).toBe(
+      'root-pack',
+    );
+    expect(status.latest().repositories[0].state).toBe('published');
+  });
+
+  it("owns a personal account's repository with a User, because no Group is named after a person", async () => {
+    const { mutations } = await run({
+      stevengonsalvez: {
+        'my-pack': {
+          apm: 'name: my-pack\nversion: 0.1.0\ntargets: [claude]\n',
+        },
+      },
+    });
+
+    const pack = mutations[0]
+      .map(e => e.entity)
+      .find(e => e.kind === 'System')!;
+    expect(pack.spec?.owner).toBe('user:default/stevengonsalvez');
+  });
+
+  it('reports an apm.yml with no name or version as a refused pack instead of dropping the repository', async () => {
+    const { status, mutations } = await run({
+      'wololo-labs': {
+        bare: {
+          apm: 'targets: [claude]\n',
+          // A passing score, so the pack's refusal is what withholds the command.
+          files: {
+            'eval-score.json': JSON.stringify({
+              verdict: 'PASS',
+              recorded: '2026-09-04',
+              metrics: { mutation_kill_rate: { candidate: 0.3, baseline: 0.23 } },
+            }),
+          },
+        },
+      },
+    });
+
+    expect(mutations[0].map(e => e.entity.metadata.name)).toEqual(['bare']);
+    expect(readInstallUnavailable(mutations[0][0].entity)).toBe('refused');
+    expect(status.latest().repositories[0].state).toBe('published');
+    expect(status.latest().repositories[0].warnings).toEqual([
+      expect.stringContaining('has no name'),
+    ]);
+  });
+
+  it('lets a legacy .agent-assets.yaml take precedence over a root apm.yml', async () => {
+    const { mutations } = await run({
+      'wololo-labs': {
+        both: {
+          manifest: SKILL_MANIFEST,
+          apm: 'name: ignored\nversion: 0.1.0\ntargets: [claude]\n',
+          files: { 'skills/one/SKILL.md': '---\ndescription: one\n---\n' },
+        },
+      },
+    });
+
+    // Only what the manifest names: the pack in apm.yml is not added to it.
+    expect(mutations[0].map(e => e.entity.metadata.name)).toEqual(['one']);
   });
 
   it('still publishes a repository whose pack declares no usable targets, and reports it', async () => {

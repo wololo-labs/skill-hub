@@ -7,7 +7,12 @@ import {
 import { GithubAssetReader, RepoRef } from '../github/GithubAssetReader';
 import { SkillHubStatus, SkillHubStatusService, RepositoryStatus } from '../status';
 import { buildEntities, publishedPaths } from './entities';
-import { ManifestError, parseManifest } from './manifest';
+import {
+  APM_FILE,
+  ManifestError,
+  manifestFromApm,
+  parseManifest,
+} from './manifest';
 
 /**
  * How many repositories are checked at once. Eight keeps a several hundred
@@ -46,12 +51,13 @@ export interface AgentAssetEntityProviderOptions {
 }
 
 /**
- * Discovers agent assets by manifest.
+ * Discovers agent assets by what a repository declares.
  *
- * A repository joins the catalogue by adding `.agent-assets.yaml` to its root
- * and leaves by removing it. Every sync applies a full mutation, which makes
- * the provider authoritative for what it emitted: an asset that stops being
- * published stops existing here on the next run, with no tombstone to write.
+ * A repository joins the catalogue by having an `apm.yml` at its root, or the
+ * legacy `.agent-assets.yaml`, and leaves by removing both. Every sync applies
+ * a full mutation, which makes the provider authoritative for what it emitted:
+ * an asset that stops being published stops existing here on the next run,
+ * with no tombstone to write.
  */
 export class AgentAssetEntityProvider implements EntityProvider {
   readonly #options: AgentAssetEntityProviderOptions;
@@ -145,7 +151,10 @@ export class AgentAssetEntityProvider implements EntityProvider {
           // a repository is invisible until it opts in.
           if (!manifest) return undefined;
 
-          const parsed = parseManifest(manifest.raw);
+          const parsed =
+            manifest.path === APM_FILE
+              ? manifestFromApm(repo.owner, repo.ownerKind)
+              : parseManifest(manifest.raw);
           const tree = await reader.getTree(repo, manifest.commitSha);
           const byPath = new Map(tree.map(e => [e.path, e.sha]));
 

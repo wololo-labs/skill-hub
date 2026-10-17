@@ -652,13 +652,13 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
     'backstage.io/managed-by-location': `url:${sourceUrl(
       repo,
       commitSha,
-      '.agent-assets.yaml',
+      manifest.source,
       'blob',
     )}`,
     'backstage.io/managed-by-origin-location': `url:${sourceUrl(
       repo,
       commitSha,
-      '.agent-assets.yaml',
+      manifest.source,
       'blob',
     )}`,
     [ANNOTATION_REPO]: `${repo.owner}/${repo.repo}`,
@@ -711,10 +711,10 @@ export async function buildEntities(input: BuildInput): Promise<BuildResult> {
       apm = {};
       refusal = 'could not be parsed as YAML';
     }
+    // A pack with no name takes its directory's, or the repository's at the root.
+    const fallbackName = dir ? stem(dir) : repo.repo;
     const name =
-      typeof apm.name === 'string' && apm.name.trim()
-        ? apm.name
-        : stem(dir || path);
+      typeof apm.name === 'string' && apm.name.trim() ? apm.name : fallbackName;
     const score = readPackageScore(
       paths.has(inDir(dir, 'eval-gate-report.json'))
         ? await read(inDir(dir, 'eval-gate-report.json'))
